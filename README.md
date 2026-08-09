@@ -53,9 +53,10 @@ Plus:
 
 - `document_index.csv` — `doc_id`, `doc_type`, `filename`, `size_bytes`. **It deliberately does not
   tell you which document is about which project or client.** Working that out is part of the task.
-- `sample_questions.json` — 25 worked examples, with answers and reasoning (see below).
+- `questions.json` — **the 371 questions you must answer.**
+- `sample_questions.json` — 23 worked examples with answers and reasoning, to calibrate against.
 - `evaluate.py` — the exact scorer we will run, so you can measure yourself.
-- `sample_submission.jsonl` — the submission format.
+- `sample_submission.csv` — the submission format.
 
 ### What you are deliberately NOT given
 
@@ -84,9 +85,10 @@ must be read out of that project's own certificate. Four documents minimum, ofte
    documents as `INR 33.38 Cr`, or `3,338.00 Lakh`, or `33,38,00,000` in Indian digit grouping. Your
    extraction has to handle all of it. (The rendering is lossless — no precision is hidden from you.)
 
-2. **Some facts exist only in prose.** A client's opinion of our work — "Very Good", "Satisfactory" —
-   appears in the text of a completion certificate and nowhere else. Questions that filter on it
-   cannot be answered by any amount of table parsing.
+2. **Some facts exist only in prose.** Names, dates and written observations appear in the text of a
+   certificate and nowhere else — no table holds them.
+   *(Questions that filter on a client's written **grading** have been withdrawn from this release:
+   the gradings are not stated consistently across the certificates. Reported by a participant.)*
 
 3. **Absence is a real answer.** "How many completed works have no reference letter on file?"
    requires proving something is *missing* across a client's whole portfolio. A system that
@@ -96,7 +98,7 @@ must be read out of that project's own certificate. Four documents minimum, ofte
 
 ## What the questions look like
 
-All 25 examples are in `sample_questions.json`, with answers and a step-by-step derivation. Three of
+All 23 examples are in `sample_questions.json`, with answers and a step-by-step derivation. Three of
 them:
 
 > **Regarding Asha Nair’s PMP work on the Cable Stayed Bridge — Jharkhand Pkg-115, what is the defensible average size across all completed projects for the commissioning client?**
@@ -117,48 +119,72 @@ kinds of question you will be scored on, only easier.
 
 ---
 
-## Scoring
+## The questions to answer
 
-You will be scored on a **larger, harder hidden set** you never see. It contains the same kinds of
-question as the samples, across all 21 reasoning patterns.
-
-Close answers earn partial credit — the aim is to reward a system that reasons correctly and misses
-one contributor, over one that guesses:
-
-**Money and other large values** (|answer| ≥ 100)
-
-| Relative error | Score |
-|---|---|
-| ≤ 0.5% | **1.0** |
-| ≤ 2% | 0.7 |
-| ≤ 10% | 0.3 |
-| more | 0 |
-
-**Counts and percentages** (|answer| < 100)
-
-| | Score |
-|---|---|
-| Exact | **1.0** |
-| Off by one | 0.3 |
-| more | 0 |
-
-Run it yourself:
-
-```bash
-python evaluate.py --self-test                                  # confirm the bands
-python evaluate.py --submission my_answers.jsonl --per-question  # score against the samples
-```
-
-### Submission format
-
-One JSON object per line, `qid` and `answer`:
+`questions.json` contains **371 questions**. Answer every one of them.
 
 ```json
-{"qid": "HV-IC-0001", "answer": 1069600000}
-{"qid": "HV-IC-0002", "answer": 58.96}
+{"qid": "HV-IC-0001", "question": "Starting with Rajesh Rao's Six Sigma Black Belt ...", "answer_type": "money"}
 ```
 
-Answer every question — an unanswered one scores zero, and a wrong one costs nothing extra.
+`answer_type` tells you the unit expected: `money` (rupees), `count`, `percent` (a number out of
+100), or `days`.
+
+---
+
+## How to submit
+
+A **CSV file** with a header row, one row per question:
+
+```
+question_id,answer
+HV-IC-0001,2942400000
+HV-IC-0002,1516600000
+HV-IC-0003,90.19
+```
+
+- **`question_id`** — exactly as given in `questions.json` (e.g. `HV-IC-0001`)
+- **`answer`** — a plain number. No commas, no currency symbols, no units, no text.
+  - money → `2942400000`, not `INR 294.24 Cr` or `2,942,400,000`
+  - percent → `90.19`, not `0.9019` or `90.19%`
+  - count → `5`
+  - days → `1388`
+- Decimals are fine where the answer needs them. Round percentages to two places.
+- **Answer all 371.** An unanswered question scores 0, and a wrong answer costs nothing extra —
+  there is no penalty for guessing.
+- Row order does not matter. Extra columns are ignored.
+
+---
+
+## Scoring
+
+Each question is scored on how close you are:
+
+```
+score = max(0, 1 - |your answer - correct answer| / correct answer)
+```
+
+Your final score is the average across all 371 questions.
+
+| your answer is | score |
+|---|---|
+| exact | **1.00** |
+| 1% off | 0.99 |
+| 5% off | 0.95 |
+| 25% off | 0.75 |
+| 50% off | 0.50 |
+| 100% off or worse | 0.00 |
+
+There are no bands and no cut-offs — every bit closer earns more. A system that reasons correctly
+and misses one contributing document still scores well; one that guesses does not.
+
+Check your own submission format before you send it:
+
+```bash
+python evaluate.py --self-test                                   # confirm the scorer
+python evaluate.py --submission my_answers.csv \
+                   --questions sample_questions.json             # score against the samples
+```
 
 ---
 

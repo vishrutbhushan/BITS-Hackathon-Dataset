@@ -1,7 +1,7 @@
 {
   "domain": "infrastructure_construction",
   "company": "National Infrastructure Corp. Ltd.",
-  "n_questions": 25,
+  "n_questions": 23,
   "gates": [
     "determinism",
     "numeric_only",
@@ -9,7 +9,7 @@
     "composite",
     "structural_uniqueness"
   ],
-  "note": "Worked examples. Every answer is a number readable from the documents in this bundle. The hidden scoring set is larger and harder, but is the same kinds of question.",
+  "note": "Worked examples. Every answer is a number readable from the documents in this bundle. The hidden scoring set is larger and harder, but is the same kinds of question.  Two doc_filtered_aggregate examples were withdrawn: the client's grading they filter on is not reliably stated in the shipped certificates, so no consistent reading of the documents reproduces their answer.",
   "questions": [
     {
       "qid": "HS-IC-0001",
@@ -199,40 +199,6 @@
         "7. Answer: 229,500,000"
       ],
       "shape": "avg_work_size",
-      "hops": 5
-    },
-    {
-      "qid": "HS-IC-0013",
-      "question": "Irrigation & Waterways Dept, Govt of Uttar Pradesh; Excellent \u2014 cross-checking those entries, what is the sum of the contract amounts for the projects the department graded Excellent on their completion certificates?",
-      "answer": 171300000,
-      "answer_type": "money",
-      "reasoning_steps": [
-        "1. Irrigation & Waterways Dept, Govt of Uttar Pradesh",
-        "2. 2 works so graded",
-        "3. client certificates",
-        "4. Excellent",
-        "5. value",
-        "6. Values read from the documents: 123,300,000, 48,000,000",
-        "7. Answer: 171,300,000"
-      ],
-      "shape": "doc_filtered_aggregate",
-      "hops": 5
-    },
-    {
-      "qid": "HS-IC-0014",
-      "question": "Jal Nigam, Jharkhand; Satisfactory \u2014 what is the total amount for those projects where the department marked Satisfactory on their completion certificates, need it locked in before the submission cutoff?",
-      "answer": 883600000,
-      "answer_type": "money",
-      "reasoning_steps": [
-        "1. Jal Nigam, Jharkhand",
-        "2. 2 works so graded",
-        "3. client certificates",
-        "4. Satisfactory",
-        "5. value",
-        "6. Values read from the documents: 730,200,000, 814,400,000, 69,200,000",
-        "7. Answer: 883,600,000"
-      ],
-      "shape": "doc_filtered_aggregate",
       "hops": 5
     },
     {
