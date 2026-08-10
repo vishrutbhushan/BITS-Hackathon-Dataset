@@ -28,10 +28,14 @@ CATEGORY_KEYWORDS = [
 
 
 def categorize(raw_category: str) -> str:
-    """Map a raw category string from completion certificates to question format."""
+    """Map a raw category string or project title to a fixed category label."""
     if not raw_category:
         return "other"
     c = raw_category.strip().lower()
-    if c == "bridges flyovers":
+    if c == "bridges flyovers" or c == "bridges and flyovers":
         return "bridges and flyovers"
-    return c
+    for category, keywords in CATEGORY_KEYWORDS:
+        for kw in keywords:
+            if kw in c:
+                return category
+    return "other"

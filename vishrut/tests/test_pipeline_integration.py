@@ -74,17 +74,11 @@ class TestPipelineIntegration(unittest.TestCase):
         finally:
             local_llm.parse_question = original
 
-    def test_invalid_client_triggers_fallback_path(self):
+    def test_invalid_client_triggers_rag_fallback(self):
         # local model proposes a client name NOT in the gazetteer ->
-        # must escalate rather than silently proceed with garbage.
+        # must escalate/fall back to RAG rather than silently proceed with garbage.
         bad_parsed = {
             "shape": "absence", "client_name": "Not A Real Client",
-            "engineer_name": None, "project_name": None,
-            "threshold_rupees": None, "grading": None, "role": None,
-            "category_to_exclude": None,
-        }
-        good_parsed = {
-            "shape": "absence", "client_name": "Jal Nigam, Jharkhand",
             "engineer_name": None, "project_name": None,
             "threshold_rupees": None, "grading": None, "role": None,
             "category_to_exclude": None,
@@ -92,19 +86,20 @@ class TestPipelineIntegration(unittest.TestCase):
         orig_local = local_llm.parse_question
         local_llm.parse_question = lambda q, g: bad_parsed
 
-        import understanding.fallback as fallback_module
-        orig_fallback = fallback_module.parse_question
-        fallback_module.parse_question = lambda q, g: good_parsed
+        orig_rag = pipeline.run_rag_fallback
+        called_rag = []
+        pipeline.run_rag_fallback = lambda q, log: (called_rag.append(q), (999, {"shape": "rag_fallback", "path": "rag_fallback"}))[1]
 
         try:
             answer, meta = pipeline.answer_question(
                 self.con, self.gazetteer, "how many works have no reference letter?"
             )
-            self.assertEqual(answer, 2)
-            self.assertEqual(meta["path"], "fallback")
+            self.assertEqual(answer, 999)
+            self.assertEqual(meta["path"], "rag_fallback")
+            self.assertEqual(len(called_rag), 1)
         finally:
             local_llm.parse_question = orig_local
-            fallback_module.parse_question = orig_fallback
+            pipeline.run_rag_fallback = orig_rag
 
 
 if __name__ == "__main__":

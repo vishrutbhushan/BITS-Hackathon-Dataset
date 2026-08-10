@@ -6,22 +6,26 @@ import csv
 import argparse
 import subprocess
 from pathlib import Path
+from utils.logger import setup_logger
 
 # Set up working directory to be the directory containing this script
 current_dir = Path(__file__).resolve().parent
 os.chdir(current_dir)
 
+# Setup logger to output to both console and a log file
+logger = setup_logger(name="vishrut", log_file="logs/run.log")
+
 def run_cmd(cmd, check=True):
-    print(f"Executing: {' '.join(cmd)}")
+    logger.info(f"Executing: {' '.join(cmd)}")
     res = subprocess.run(cmd)
     if check and res.returncode != 0:
         raise RuntimeError(f"Command failed with exit code {res.returncode}")
     return res
 
 def convert_jsonl_to_csv(jsonl_path, csv_path):
-    print(f"Converting {jsonl_path} to CSV format: {csv_path}")
+    logger.info(f"Converting {jsonl_path} to CSV format: {csv_path}")
     if not os.path.exists(jsonl_path):
-        print(f"Error: {jsonl_path} does not exist. Cannot convert to CSV.")
+        logger.error(f"{jsonl_path} does not exist. Cannot convert to CSV.")
         return False
     try:
         with open(jsonl_path, "r", encoding="utf-8-sig") as f_in:
@@ -40,12 +44,11 @@ def convert_jsonl_to_csv(jsonl_path, csv_path):
                     item = json.loads(line)
                     writer.writerow([item.get("qid"), item.get("answer")])
                 except json.JSONDecodeError as je:
-                    print(f"Warning: failed to decode line: {repr(line)}. Error: {je}")
+                    logger.warning(f"Failed to decode line: {repr(line)}. Error: {je}")
         return True
     except Exception as e:
-        print(f"Error during CSV conversion: {e}")
+        logger.error(f"Error during CSV conversion: {e}", exc_info=True)
         return False
-
 
 def main():
     parser = argparse.ArgumentParser(description="Run Vishrut Pipeline")
@@ -62,78 +65,87 @@ def main():
     )
     args = parser.parse_args()
 
-    print("=== Step 1: Install Requirements ===")
+    # Create directories for logs and output
+    Path("output").mkdir(exist_ok=True)
+    Path("logs").mkdir(exist_ok=True)
+
+    logger.info("=== Step 1: Install Requirements ===")
     run_cmd([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     run_cmd([sys.executable, "-m", "pip", "install", "python-dotenv", "openai"])
     
-    print("\n=== Step 2: Build Database ===")
+    logger.info("=== Step 2: Build Database ===")
+    db_path = "../graph.sqlite"
     try:
-        run_cmd([sys.executable, "graph/build_db.py", "--db", "graph.sqlite"])
+        run_cmd([sys.executable, "graph/build_db.py", "--db", db_path])
     except Exception as e:
-        print(f"[Warning] Database build failed or was locked: {e}. Proceeding with existing database.")
+        logger.warning(f"Database build failed or was locked: {e}. Proceeding with existing database.")
     
-    print(f"\n=== Step 3: Convert {args.questions} to questions.jsonl ===")
+    logger.info(f"=== Step 3: Convert {args.questions} to output/questions.jsonl ===")
     src_questions = Path(args.questions)
-    out_questions = Path("questions.jsonl")
+    out_questions = Path("output/questions.jsonl")
     
     if not src_questions.exists():
-        print(f"Error: {src_questions} does not exist!")
+        logger.error(f"Questions source path {src_questions} does not exist!")
         sys.exit(1)
         
     with open(src_questions, "r", encoding="utf-8") as f:
         data = json.load(f)
         
     questions = data.get("questions", data.get("answers", []))
-    print(f"Loaded {len(questions)} questions from {src_questions}")
+    logger.info(f"Loaded {len(questions)} questions from {src_questions}")
     
     with open(out_questions, "w", encoding="utf-8") as f:
         for q in questions:
             json.dump({"qid": q["qid"], "question": q["question"]}, f)
             f.write("\n")
-    print(f"Wrote questions to {out_questions}")
+    logger.info(f"Wrote questions to {out_questions}")
     
-    print("\n=== Step 4: Run Pipeline ===")
+    logger.info("=== Step 4: Run Pipeline ===")
+    submission_jsonl = Path("output/submission.jsonl")
+    run_log_json = Path("logs/run_log.json")
+    
     run_cmd([
         sys.executable,
         "pipeline.py",
-        "--db", "graph.sqlite",
-        "--questions", "questions.jsonl",
-        "--out", "submission.jsonl",
+        "--db", db_path,
+        "--questions", str(out_questions),
+        "--out", str(submission_jsonl),
+        "--log", str(run_log_json),
         "--delay", str(args.delay)
     ], check=False)
     
-    print("\n=== Step 5: Convert Output to CSV ===")
-    success = convert_jsonl_to_csv("submission.jsonl", "submission.csv")
-    if success and os.path.exists("submission.csv"):
-        # Copy submission.csv to the parent/root directory
+    logger.info("=== Step 5: Convert Output to CSV ===")
+    submission_csv = Path("output/submission.csv")
+    success = convert_jsonl_to_csv(str(submission_jsonl), str(submission_csv))
+    if success and submission_csv.exists():
+        # Keep a copy directly in vishrut/ folder as requested: "generated answers will be in vishrut folder only"
         import shutil
-        shutil.copy("submission.csv", "../submission.csv")
-        print("Copied submission.csv to parent/root directory.")
+        shutil.copy(submission_csv, "submission.csv")
+        logger.info("Successfully generated submission.csv in output/ and copied to vishrut/.")
     else:
-        print("Error: CSV conversion failed or submission.csv was not found.")
+        logger.error("CSV conversion failed or submission.csv was not found.")
     
-    print("\n=== Step 6: Evaluate Results ===")
+    logger.info("=== Step 6: Evaluate Results ===")
     eval_script = Path("../evaluate.py")
     if not eval_script.exists():
-        print(f"Error: evaluate.py not found at {eval_script}")
+        logger.error(f"evaluate.py not found at {eval_script}")
         sys.exit(1)
         
     # First run self-test
-    print("Running evaluate.py self-test...")
+    logger.info("Running evaluate.py self-test...")
     run_cmd([sys.executable, str(eval_script), "--self-test"], check=False)
     
-    if os.path.exists("submission.csv"):
-        # Run evaluate.py
-        print(f"Evaluating submission against {src_questions}...")
+    if submission_csv.exists():
+        logger.info(f"Evaluating submission against {src_questions}...")
         run_cmd([
             sys.executable,
             str(eval_script),
-            "--submission", "submission.csv",
+            "--submission", str(submission_csv),
             "--questions", str(src_questions),
             "--per-question"
         ], check=False)
     else:
-        print("Error: submission.csv was not generated.")
+        logger.error("submission.csv was not generated.")
 
 if __name__ == "__main__":
     main()

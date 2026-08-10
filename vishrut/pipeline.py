@@ -18,6 +18,9 @@ import argparse
 import json
 import sys
 import time
+import logging
+
+logger = logging.getLogger("vishrut.pipeline")
 
 from db.schema import get_connection
 from understanding.entity_match import Gazetteer
@@ -100,7 +103,7 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     which path was used and the execution trace, for debugging.
     """
     parsed = local_llm.parse_question(question_text, gazetteer)
-    used = "local_pipeline_hybrid"
+    used = "local"
 
     # 1. Deterministic Rule-Based Shape Classification Overwrite
     pred_shape = classify_shape(question_text)
@@ -132,7 +135,7 @@ def answer_question(con, gazetteer, question_text: str, log=None):
 
     # 5. Entity Validation (Warn rather than crash, fall back to RAG if invalid)
     if not local_llm.validate(parsed, gazetteer):
-        print(f"[warn] Validation failed for {parsed}, falling back to RAG...", file=sys.stderr)
+        logger.warning(f"Validation failed for {parsed}, falling back to RAG...")
         return run_rag_fallback(question_text, log)
 
     shape = parsed["shape"]
@@ -169,7 +172,7 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     try:
         raw_answer, trace = fn(con, **kwargs)
     except Exception as e:
-        print(f"[warn] Dispatcher failed for shape {shape}: {e}, falling back to RAG...", file=sys.stderr)
+        logger.warning(f"Dispatcher failed for shape {shape}: {e}, falling back to RAG...")
         return run_rag_fallback(question_text, log)
 
     answer_type_by_shape = {
@@ -293,7 +296,7 @@ Example: {{"answer": 537933333}}
             else:
                 final_answer = 0
     except Exception as e:
-        print(f"[RAG Fallback] Error: {e}", file=sys.stderr)
+        logger.error(f"[RAG Fallback] Error: {e}", exc_info=True)
         final_answer = 0
         
     meta = {"shape": "rag_fallback", "path": "rag_fallback", "top_docs": [d["doc_id"] for d in top_docs]}
@@ -313,17 +316,17 @@ def run(db_path: str, questions_path: str, out_path: str, log_path: str = None, 
         questions = [json.loads(line.strip()) for line in f if line.strip()]
         
     total_questions = len(questions)
-    print(f"Loaded {total_questions} questions from {questions_path}")
+    logger.info(f"Loaded {total_questions} questions from {questions_path}")
 
     with open(out_path, "w", encoding="utf-8") as out:
         for index, item in enumerate(questions, 1):
             qid, question = item["qid"], item["question"]
-            print(f"[{index}/{total_questions}] {qid}: Processing... ", end="", flush=True)
+            logger.info(f"[{index}/{total_questions}] {qid}: Processing...")
             try:
                 answer, meta = answer_question(con, gazetteer, question, log=log)
-                print(f"Success! Shape: {meta['shape']} -> Answer: {answer}")
+                logger.info(f"[{index}/{total_questions}] {qid}: Success! Shape: {meta['shape']} -> Answer: {answer}")
             except Exception as e:
-                print(f"Failed! Error: {e}")
+                logger.error(f"[{index}/{total_questions}] {qid}: Failed! Error: {e}", exc_info=True)
                 answer = 0
             out.write(json.dumps({"qid": qid, "answer": answer}) + "\n")
             out.flush()
@@ -336,6 +339,7 @@ def run(db_path: str, questions_path: str, out_path: str, log_path: str = None, 
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True, help="path to the sqlite graph DB built by graph/build_graph.py")
     ap.add_argument("--questions", required=True, help="questions.jsonl, one {qid, question} per line")
@@ -344,4 +348,4 @@ if __name__ == "__main__":
     ap.add_argument("--delay", type=float, default=2.0, help="delay in seconds between queries to avoid rate limiting")
     args = ap.parse_args()
     run(args.db, args.questions, args.out, args.log, args.delay)
-    print(f"Wrote {args.out}")
+    logger.info(f"Wrote {args.out}")
