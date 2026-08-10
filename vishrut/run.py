@@ -13,11 +13,7 @@ os.chdir(current_dir)
 
 def run_cmd(cmd, check=True):
     print(f"Executing: {' '.join(cmd)}")
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.stdout:
-        print(res.stdout)
-    if res.stderr:
-        print("Error/Warning output:", res.stderr)
+    res = subprocess.run(cmd)
     if check and res.returncode != 0:
         raise RuntimeError(f"Command failed with exit code {res.returncode}")
     return res
