@@ -100,7 +100,7 @@ def extract_personnel_certificate(text: str) -> dict:
     lines = text.split('\n')
     engineer_name = None
     for i, line in enumerate(lines):
-        if "This is to certify that" in line and i + 1 < len(lines):
+        if ("This is to certify that" in line or "conferred upon" in line or "conferred on" in line) and i + 1 < len(lines):
             val = lines[i+1].strip()
             if val:
                 engineer_name = val
@@ -144,11 +144,71 @@ def extract_cv(text: str) -> dict:
     }
 
 
+def extract_company_completion_certificate(text: str) -> dict:
+    """company_completion_certificate: perfectly formatted company record."""
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    project_name = None
+    client_raw = None
+    category_raw = None
+    value_raw = None
+    completion_date_raw = None
+    engineer_name = None
+    
+    for i, line in enumerate(lines):
+        if line.lower() in ("work", "project name") and i + 1 < len(lines):
+            project_name = lines[i+1]
+            break
+            
+    for i, line in enumerate(lines):
+        if line.lower() == "client" and i + 1 < len(lines):
+            client_raw = lines[i+1]
+            break
+            
+    for i, line in enumerate(lines):
+        if line.lower() in ("category", "work category") and i + 1 < len(lines):
+            category_raw = lines[i+1]
+            break
+            
+    for i, line in enumerate(lines):
+        if line.lower() in ("executed value", "value", "contract value") and i + 1 < len(lines):
+            value_raw = lines[i+1]
+            break
+            
+    for i, line in enumerate(lines):
+        if line.lower() in ("completion", "completion date") and i + 1 < len(lines):
+            completion_date_raw = lines[i+1]
+            break
+            
+    for i, line in enumerate(lines):
+        if line.lower() in ("project lead", "project manager") and i + 1 < len(lines):
+            engineer_name = lines[i+1]
+            break
+            
+    # Clean the fields
+    client_name = re.sub(r'\s*\((government|private|psu)\)\s*$', '', client_raw, flags=re.I).strip() if client_raw else None
+    
+    # Clean engineer name (stop at period or "This certificate")
+    if engineer_name:
+        engineer_name = re.split(r'\.|\bThis certificate\b', engineer_name, flags=re.I)[0].strip()
+        
+    return {
+        "project_name": project_name,
+        "client_name": client_name,
+        "client_raw": client_raw,
+        "category": categorize(category_raw) if category_raw else "other",
+        "value_rupees": parse_money(value_raw) if value_raw else parse_money(text),
+        "completion_date": parse_date(completion_date_raw) if completion_date_raw else parse_date(text),
+        "engineer_name": engineer_name,
+    }
+
+
 # Registry so the extraction driver can dispatch by doc_type without a
 # long if/elif chain. Extend as you add extractors for the remaining
 # doc types (performance_bond, ra_bill, financial_statement, ...).
 EXTRACTORS = {
     "completion_certificate": extract_completion_certificate,
+    "company_completion_certificate": extract_company_completion_certificate,
     "reference_letter": extract_reference_letter,
     "personnel_certificate": extract_personnel_certificate,
     "cv": extract_cv,

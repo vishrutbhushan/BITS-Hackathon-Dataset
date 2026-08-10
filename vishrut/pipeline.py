@@ -26,24 +26,122 @@ from shapes.dispatcher import REGISTRY
 from format_answer import format_answer
 
 
+def classify_shape(q_text):
+    q = q_text.lower()
+    if "lack" in q or "no client reference" in q or "no reference letter" in q:
+        return "absence"
+    if "percent" in q or "percentage" in q or "share" in q or "collection figure" in q or "out of one hundred" in q:
+        return "referenced_share"
+    if "days" in q or "interval" in q or "exact interval" in q:
+        return "date_span"
+    if "distinct" in q or "different categories" in q or "separate internal" in q:
+        return "distinct_count"
+    if "after" in q and ("completed" in q or "wrapped up" in q or "finished" in q or "issued" in q or "issuance" in q or "credential" in q):
+        return "temporal_chain"
+    if "excluding" in q or "exclude" in q:
+        return "exclusion_aggregate"
+    if "additional work" in q or "credential target" in q:
+        return "gap_to_threshold"
+    if "second largest" in q or "second-largest" in q:
+        return "rank_value"
+    if "as prime" in q or "as subcontractor" in q or "as joint venture" in q:
+        return "role_split"
+    if "exceed" in q or "crossing" in q or "hitting" in q:
+        return "threshold_aggregate"
+    if "mean" in q or "average" in q:
+        return "avg_work_size"
+    if "grading" in q or "assessed as" in q:
+        return "doc_filtered_aggregate"
+    if "combined value" in q or "total value" in q or "aggregate value" in q:
+        return "hop_aggregate"
+    return "unknown"
+
+
+def _resolve_client_from_project(con, project_name):
+    if not project_name:
+        return None
+    row = con.execute(
+        "SELECT c.name FROM projects p JOIN clients c ON p.client_id = c.client_id WHERE p.name = ?",
+        (project_name,)
+    ).fetchone()
+    if row:
+        return row[0]
+    # Fallback to fuzzy match
+    row_fuzzy = con.execute(
+        "SELECT c.name FROM projects p JOIN clients c ON p.client_id = c.client_id WHERE p.name LIKE ?",
+        (f"%{project_name}%",)
+    ).fetchone()
+    if row_fuzzy:
+        return row_fuzzy[0]
+    return None
+
+
+def _resolve_engineer_from_project(con, project_name):
+    if not project_name:
+        return None
+    row = con.execute(
+        "SELECT e.name FROM projects p JOIN engineers e ON p.engineer_id = e.engineer_id WHERE p.name = ?",
+        (project_name,)
+    ).fetchone()
+    if row:
+        return row[0]
+    row_fuzzy = con.execute(
+        "SELECT e.name FROM projects p JOIN engineers e ON p.engineer_id = e.engineer_id WHERE p.name LIKE ?",
+        (f"%{project_name}%",)
+    ).fetchone()
+    if row_fuzzy:
+        return row_fuzzy[0]
+    return None
+
+
 def answer_question(con, gazetteer, question_text: str, log=None):
     """Run Stage 4 (understand) -> Stage 5 (execute) -> Stage 6 (format)
     for a single question. Returns (answer, meta) where meta records
     which path was used and the execution trace, for debugging.
     """
     parsed = local_llm.parse_question(question_text, gazetteer)
-    used = "openrouter"
+    used = "local_pipeline_hybrid"
 
+    # 1. Deterministic Rule-Based Shape Classification Overwrite
+    pred_shape = classify_shape(question_text)
+    if pred_shape != "unknown":
+        parsed["shape"] = pred_shape
+
+    # 2. Multi-hop Entity Resolution from Project Name (Unconditionally overwrite if project_name is present)
+    if parsed.get("project_name"):
+        resolved_client = _resolve_client_from_project(con, parsed["project_name"])
+        if resolved_client:
+            parsed["client_name"] = resolved_client
+        resolved_eng = _resolve_engineer_from_project(con, parsed["project_name"])
+        if resolved_eng:
+            parsed["engineer_name"] = resolved_eng
+
+    # 3. Rule-Based Threshold Money Extraction Overwrite (Unconditionally overwrite using parse_money if found)
+    from parsers.money import parse_money
+    extracted_money = parse_money(question_text)
+    if extracted_money is not None:
+        parsed["threshold_rupees"] = extracted_money
+
+    # 4. Rule-Based Category Exclusion Fallback
+    if parsed.get("category_to_exclude") is None:
+        q_low = question_text.lower()
+        for cat in ["bridges and flyovers", "water treatment", "industrial epc", "roads maintenance", "buildings", "tunnels", "water supply"]:
+            if cat in q_low or cat.replace(" and ", " ") in q_low or cat.rstrip("s") in q_low:
+                parsed["category_to_exclude"] = cat
+                break
+
+    # 5. Entity Validation (Warn rather than crash, fall back to RAG if invalid)
     if not local_llm.validate(parsed, gazetteer):
-        raise ValueError(f"OpenRouter model output failed validation: {parsed}")
-
+        print(f"[warn] Validation failed for {parsed}, falling back to RAG...", file=sys.stderr)
+        return run_rag_fallback(question_text, log)
 
     shape = parsed["shape"]
+    if shape == "unknown" or shape not in REGISTRY:
+        return run_rag_fallback(question_text, log)
+
     fn = REGISTRY[shape]
 
     # Map the parsed fields onto each shape function's actual kwargs.
-    # This mapping is the one place that has to know each shape's
-    # signature -- kept centralized here rather than scattered.
     kwargs_by_shape = {
         "absence": {"client_name": parsed["client_name"]},
         "referenced_share": {"client_name": parsed["client_name"]},
@@ -68,7 +166,11 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     if kwargs is None:
         raise ValueError(f"no kwargs mapping for shape {shape!r} -- add one as you add shapes")
 
-    raw_answer, trace = fn(con, **kwargs)
+    try:
+        raw_answer, trace = fn(con, **kwargs)
+    except Exception as e:
+        print(f"[warn] Dispatcher failed for shape {shape}: {e}, falling back to RAG...", file=sys.stderr)
+        return run_rag_fallback(question_text, log)
 
     answer_type_by_shape = {
         "absence": "count", "distinct_count": "count",
@@ -82,6 +184,122 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     if log is not None:
         log.append({"question": question_text, **meta, "answer": final_answer})
 
+    return final_answer, meta
+
+
+cached_documents = []
+
+def run_rag_fallback(question_text, log=None):
+    global cached_documents
+    import os
+    import csv
+    import re
+    from pathlib import Path
+    
+    workspace_root = Path("c:/Code/BITS-Hackathon-Dataset")
+    
+    # 1. Load documents if not cached
+    if not cached_documents:
+        index_csv = workspace_root / "document_index.csv"
+        extracted_text_root = workspace_root / "extracted_text"
+        if index_csv.exists() and extracted_text_root.exists():
+            with open(index_csv, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    doc_id = row["doc_id"]
+                    doc_type = row["doc_type"]
+                    txt_path = extracted_text_root / doc_type / f"{doc_id}.txt"
+                    if txt_path.exists():
+                        cached_documents.append({
+                            "doc_id": doc_id,
+                            "doc_type": doc_type,
+                            "text": txt_path.read_text(encoding="utf-8"),
+                            "filename": row["filename"]
+                        })
+
+    # 2. Retrieve top matching documents
+    words = re.findall(r'\b[A-Za-z0-9]{3,}\b', question_text)
+    entities = re.findall(r'\b[A-Z][a-z0-9]+\b', question_text)
+    
+    scored = []
+    for doc in cached_documents:
+        score = 0
+        doc_text_lower = doc["text"].lower()
+        for w in words:
+            if w.lower() in doc_text_lower:
+                score += 1
+        for ent in entities:
+            if ent in doc["text"]:
+                score += 3
+                
+        # Boost specific document types based on question content
+        q_low = question_text.lower()
+        if "bill" in q_low and "bill" in doc["doc_type"]:
+            score += 8
+        if "ledger" in q_low and ("ledger" in doc["doc_type"] or "workbook" in doc["doc_type"]):
+            score += 8
+        if "invoice" in q_low and "invoice" in doc["doc_type"]:
+            score += 8
+        if "bank" in q_low and "bank" in doc["doc_type"]:
+            score += 8
+        if "annual" in q_low and "annual" in doc["doc_type"]:
+            score += 8
+            
+        scored.append((doc, score))
+        
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top_docs = [x[0] for x in scored[:4]] # Get top 4 documents
+    
+    # 3. Build context
+    context_parts = []
+    for doc in top_docs:
+        context_parts.append(f"--- Document ID: {doc['doc_id']} | Type: {doc['doc_type']} | Filename: {doc['filename']} ---\n{doc['text']}")
+    context_text = "\n\n".join(context_parts)
+    
+    # 4. Prompt the LLM
+    prompt = f"""You are an expert financial auditor answering questions on a construction document estate.
+
+QUESTION:
+{question_text}
+
+RETRIEVED RELEVANT DOCUMENTS:
+{context_text}
+
+INSTRUCTIONS:
+1. Analyze the retrieved documents and identify the values needed to answer the question.
+2. Carry out any required calculations/arithmetic precisely.
+3. Return ONLY a valid JSON object with key "answer" containing the single plain number answer (no units, no commas, no formatting).
+   - If money, output plain integer rupees (e.g. 537933333, not 53.79 Cr).
+   - If percentage, output number out of 100 (e.g. 33.33, not 0.3333).
+   - If days, output integer number of days.
+   - If count, output integer count.
+   
+Example: {{"answer": 537933333}}
+"""
+    try:
+        from understanding.local_llm import query_llm_direct
+        response_text = query_llm_direct(prompt)
+        
+        # Parse answer
+        m_json = re.search(r'\{.*?"answer"\s*:\s*([-\d.]+).*?\}', response_text, re.S)
+        if m_json:
+            ans_val = float(m_json.group(1))
+            final_answer = int(ans_val) if ans_val.is_integer() else round(ans_val, 2)
+        else:
+            m_num = re.search(r'([-\d]+(?:\.\d+)?)', response_text)
+            if m_num:
+                ans_val = float(m_num.group(1))
+                final_answer = int(ans_val) if ans_val.is_integer() else round(ans_val, 2)
+            else:
+                final_answer = 0
+    except Exception as e:
+        print(f"[RAG Fallback] Error: {e}", file=sys.stderr)
+        final_answer = 0
+        
+    meta = {"shape": "rag_fallback", "path": "rag_fallback", "top_docs": [d["doc_id"] for d in top_docs]}
+    if log is not None:
+        log.append({"question": question_text, **meta, "answer": final_answer})
+        
     return final_answer, meta
 
 

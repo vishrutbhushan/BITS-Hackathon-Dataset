@@ -27,7 +27,25 @@ def build_graph(con, completion_certificates, reference_letters, personnel_certs
     personnel_certs: [{engineer_name, cert_type, cert_number, issue_date, doc_id}, ...]
     cvs: [{engineer_name, projects_led: [project_name, ...], doc_id}, ...]
     """
+    import re
+
+    def clean_proj(name):
+        if not name:
+            return ""
+        name = name.lower()
+        name = re.sub(r'project\s*name|name\s*of\s*work|work', '', name)
+        name = re.sub(r'\s+', '', name)
+        name = re.sub(r'[^a-z0-9]', '', name)
+        return name
+
     referenced_projects = {r["project_name"] for r in reference_letters if r.get("project_name")}
+    cleaned_referenced = {clean_proj(p) for p in referenced_projects}
+    
+    referenced_packages = set()
+    for p in referenced_projects:
+        pkg_match = re.search(r'\b[Pp][Kk][Gg]-(\d+)\b', p)
+        if pkg_match:
+            referenced_packages.add(int(pkg_match.group(1)))
 
     # engineer -> project links can come from either the certificate
     # itself (if it names the engineer) or the CV -- merge both sources.
@@ -43,6 +61,14 @@ def build_graph(con, completion_certificates, reference_letters, personnel_certs
         engineer_name = cert.get("engineer_name") or engineer_by_project.get(cert["project_name"])
         engineer_id = upsert_engineer(con, engineer_name) if engineer_name else None
 
+        # Resolve whether this project has a reference letter
+        has_ref = 0
+        pkg_match = re.search(r'\b[Pp][Kk][Gg]-(\d+)\b', cert["project_name"])
+        if pkg_match and int(pkg_match.group(1)) in referenced_packages:
+            has_ref = 1
+        elif clean_proj(cert["project_name"]) in cleaned_referenced:
+            has_ref = 1
+
         con.execute(
             """INSERT INTO projects
                (name, client_id, engineer_id, category, value_rupees,
@@ -52,7 +78,7 @@ def build_graph(con, completion_certificates, reference_letters, personnel_certs
                 cert["project_name"], client_id, engineer_id,
                 cert.get("category", "other"), cert["value_rupees"],
                 cert.get("completion_date"), cert.get("grading"), cert.get("role"),
-                1 if cert["project_name"] in referenced_projects else 0,
+                has_ref,
                 cert.get("doc_id"),
             ),
         )

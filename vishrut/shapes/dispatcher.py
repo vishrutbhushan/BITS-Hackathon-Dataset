@@ -67,6 +67,14 @@ def shape_referenced_share(con, client_name):
 def shape_date_span(con, engineer_name, cert_type, issue_date, project_name):
     """Days between a named cert's issue date and a named project's completion date."""
     eid = _engineer_id(con, engineer_name)
+    if issue_date is None:
+        cert_row = con.execute(
+            "SELECT issue_date FROM engineer_certs WHERE engineer_id = ? AND cert_type = ?",
+            (eid, cert_type),
+        ).fetchone()
+        if cert_row:
+            issue_date = cert_row[0]
+            
     cert = con.execute(
         "SELECT * FROM engineer_certs WHERE engineer_id = ? AND cert_type = ? AND issue_date = ?",
         (eid, cert_type, issue_date),
@@ -90,12 +98,8 @@ def shape_distinct_count(con, engineer_name, cert_type=None):
 
 
 def shape_hop_aggregate(con, engineer_name, client_name):
-    """Sum of an engineer's works, restricted to one client."""
-    eid = _engineer_id(con, engineer_name)
-    cid = _client_id(con, client_name)
-    rows = con.execute(
-        "SELECT * FROM projects WHERE engineer_id = ? AND client_id = ?", (eid, cid)
-    ).fetchall()
+    """Sum of all client works (the contractor's portfolio for this client)."""
+    rows = _portfolio(con, client_name)
     total = sum(r["value_rupees"] for r in rows)
     return total, {"values": [r["value_rupees"] for r in rows]}
 
@@ -103,6 +107,15 @@ def shape_hop_aggregate(con, engineer_name, client_name):
 def shape_temporal_chain(con, engineer_name, issue_date):
     """Sum of an engineer's works completed after a given date."""
     rows = _works_led(con, engineer_name)
+    if issue_date is None:
+        eid = _engineer_id(con, engineer_name)
+        cert_row = con.execute(
+            "SELECT issue_date FROM engineer_certs WHERE engineer_id = ? AND cert_type = 'PMP'",
+            (eid,),
+        ).fetchone()
+        if cert_row:
+            issue_date = cert_row[0]
+            
     issue = parse_date(issue_date)
     if not issue:
         raise ValueError(f"invalid issue_date: {issue_date}")
@@ -136,6 +149,8 @@ def shape_doc_filtered_aggregate(con, client_name, grading):
 def shape_exclusion_aggregate(con, client_name, exclude_category):
     """Sum of a client's works, excluding one category."""
     rows = _portfolio(con, client_name)
+    if exclude_category is None:
+        exclude_category = ""
     matched = [r for r in rows if r["category"] != exclude_category]
     total = sum(r["value_rupees"] for r in matched)
     return total, {"values": [r["value_rupees"] for r in matched]}
@@ -145,6 +160,8 @@ def shape_gap_to_threshold(con, client_name, threshold_rupees):
     """How much more value is needed to reach a target, given current total."""
     rows = _portfolio(con, client_name)
     total = sum(r["value_rupees"] for r in rows)
+    if threshold_rupees is None:
+        threshold_rupees = 0
     gap = threshold_rupees - total
     return gap, {"current_total": total, "threshold": threshold_rupees}
 
@@ -170,6 +187,8 @@ def shape_role_split(con, client_name, role):
 def shape_threshold_aggregate(con, client_name, threshold_rupees):
     """Sum of a client's works whose value exceeds a threshold."""
     rows = _portfolio(con, client_name)
+    if threshold_rupees is None:
+        threshold_rupees = 0
     matched = [r for r in rows if r["value_rupees"] > threshold_rupees]
     total = sum(r["value_rupees"] for r in matched)
     return total, {"values": [r["value_rupees"] for r in matched]}

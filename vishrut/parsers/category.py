@@ -27,16 +27,11 @@ CATEGORY_KEYWORDS = [
 ]
 
 
-def categorize(project_title: str) -> str:
-    """Map a project title to a fixed category label. Returns 'other' if
-    nothing matches -- log these during a real run so the taxonomy above
-    can be extended to cover them.
-    """
-    if not project_title:
+def categorize(raw_category: str) -> str:
+    """Map a raw category string from completion certificates to question format."""
+    if not raw_category:
         return "other"
-    t = project_title.lower()
-    for category, keywords in CATEGORY_KEYWORDS:
-        for kw in keywords:
-            if kw in t:
-                return category
-    return "other"
+    c = raw_category.strip().lower()
+    if c == "bridges flyovers":
+        return "bridges and flyovers"
+    return c

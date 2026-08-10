@@ -24,18 +24,23 @@ def convert_jsonl_to_csv(jsonl_path, csv_path):
         print(f"Error: {jsonl_path} does not exist. Cannot convert to CSV.")
         return False
     try:
-        with open(jsonl_path, "r", encoding="utf-8") as f_in, open(csv_path, "w", newline="", encoding="utf-8") as f_out:
+        with open(jsonl_path, "r", encoding="utf-8-sig") as f_in:
+            lines = f_in.readlines()
+            
+        with open(csv_path, "w", newline="", encoding="utf-8") as f_out:
             writer = csv.writer(f_out)
             writer.writerow(["question_id", "answer"])
-            for line in f_in:
+            for line in lines:
                 line = line.strip()
                 if not line:
                     continue
+                line = line.replace('\x00', '')
+                line = line.strip('\ufeff')
                 try:
                     item = json.loads(line)
                     writer.writerow([item.get("qid"), item.get("answer")])
                 except json.JSONDecodeError as je:
-                    print(f"Warning: failed to decode line: {line}. Error: {je}")
+                    print(f"Warning: failed to decode line: {repr(line)}. Error: {je}")
         return True
     except Exception as e:
         print(f"Error during CSV conversion: {e}")
@@ -46,14 +51,14 @@ def main():
     parser = argparse.ArgumentParser(description="Run Vishrut Pipeline")
     parser.add_argument(
         "--questions", 
-        default="../sample_questions.json", 
-        help="Path to questions JSON file (default: ../sample_questions.json)"
+        default="../questions.json", 
+        help="Path to questions JSON file (default: ../questions.json)"
     )
     parser.add_argument(
         "--delay",
         type=float,
-        default=2.0,
-        help="Delay in seconds between OpenRouter requests to avoid rate limits (default: 2.0)"
+        default=0.0,
+        help="Delay in seconds between proxy requests (default: 0.0)"
     )
     args = parser.parse_args()
 
@@ -62,7 +67,10 @@ def main():
     run_cmd([sys.executable, "-m", "pip", "install", "python-dotenv", "openai"])
     
     print("\n=== Step 2: Build Database ===")
-    run_cmd([sys.executable, "graph/build_db.py", "--db", "graph.sqlite"])
+    try:
+        run_cmd([sys.executable, "graph/build_db.py", "--db", "graph.sqlite"])
+    except Exception as e:
+        print(f"[Warning] Database build failed or was locked: {e}. Proceeding with existing database.")
     
     print(f"\n=== Step 3: Convert {args.questions} to questions.jsonl ===")
     src_questions = Path(args.questions)
@@ -85,14 +93,6 @@ def main():
     print(f"Wrote questions to {out_questions}")
     
     print("\n=== Step 4: Run Pipeline ===")
-    from dotenv import load_dotenv
-    load_dotenv(current_dir / ".env")
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        print("[Warning] OPENROUTER_API_KEY is not set in vishrut/.env")
-        print("Please edit vishrut/.env and set your OPENROUTER_API_KEY first.")
-        print("Pipeline run will be executed, but LLM calls will fail if required.")
-    
     run_cmd([
         sys.executable,
         "pipeline.py",
@@ -104,8 +104,13 @@ def main():
     
     print("\n=== Step 5: Convert Output to CSV ===")
     success = convert_jsonl_to_csv("submission.jsonl", "submission.csv")
-    if not success:
-        print("Error: CSV conversion failed.")
+    if success and os.path.exists("submission.csv"):
+        # Copy submission.csv to the parent/root directory
+        import shutil
+        shutil.copy("submission.csv", "../submission.csv")
+        print("Copied submission.csv to parent/root directory.")
+    else:
+        print("Error: CSV conversion failed or submission.csv was not found.")
     
     print("\n=== Step 6: Evaluate Results ===")
     eval_script = Path("../evaluate.py")
