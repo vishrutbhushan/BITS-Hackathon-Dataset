@@ -24,15 +24,27 @@ def run_cmd(cmd, check=True):
 
 def convert_jsonl_to_csv(jsonl_path, csv_path):
     print(f"Converting {jsonl_path} to CSV format: {csv_path}")
-    with open(jsonl_path, "r", encoding="utf-8") as f_in, open(csv_path, "w", newline="", encoding="utf-8") as f_out:
-        writer = csv.writer(f_out)
-        writer.writerow(["question_id", "answer"])
-        for line in f_in:
-            line = line.strip()
-            if not line:
-                continue
-            item = json.loads(line)
-            writer.writerow([item["qid"], item["answer"]])
+    if not os.path.exists(jsonl_path):
+        print(f"Error: {jsonl_path} does not exist. Cannot convert to CSV.")
+        return False
+    try:
+        with open(jsonl_path, "r", encoding="utf-8") as f_in, open(csv_path, "w", newline="", encoding="utf-8") as f_out:
+            writer = csv.writer(f_out)
+            writer.writerow(["question_id", "answer"])
+            for line in f_in:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                    writer.writerow([item.get("qid"), item.get("answer")])
+                except json.JSONDecodeError as je:
+                    print(f"Warning: failed to decode line: {line}. Error: {je}")
+        return True
+    except Exception as e:
+        print(f"Error during CSV conversion: {e}")
+        return False
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run Vishrut Pipeline")
@@ -88,7 +100,9 @@ def main():
     ], check=False)
     
     print("\n=== Step 5: Convert Output to CSV ===")
-    convert_jsonl_to_csv("submission.jsonl", "submission.csv")
+    success = convert_jsonl_to_csv("submission.jsonl", "submission.csv")
+    if not success:
+        print("Error: CSV conversion failed.")
     
     print("\n=== Step 6: Evaluate Results ===")
     eval_script = Path("../evaluate.py")
