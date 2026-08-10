@@ -32,8 +32,8 @@ class BidIntelligencePipeline:
         self.reasoner = ReasonerNode(use_llm=use_llm)
 
     def answer_question(self, question: str, answer_type: str = "money") -> Dict[str, Any]:
-        # Step 1: Intent Planning & DAG Decomposition
-        plan = self.planner.plan(question)
+        # Step 1: Intent Planning & DAG Decomposition with answer_type hard constraint
+        plan = self.planner.plan(question, answer_type=answer_type)
 
         # Step 2: Subtask Execution via DuckDB FTS & Relational SQL
         context = self.retriever.execute_plan(plan)
