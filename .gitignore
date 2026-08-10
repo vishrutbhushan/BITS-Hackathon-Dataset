@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# BITS Pipeline Outputs and Logs
+run_log.json
+graph.sqlite
+submission_backup_*.csv
+vishrut/output/
+vishrut/logs/
+vishrut/submission_backup_*.csv
+vishrut/submission.csv
+vishrut/submission.jsonl
+vishrut/questions.jsonl
+
