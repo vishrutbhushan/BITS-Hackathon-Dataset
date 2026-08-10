@@ -21,7 +21,7 @@ from parsers.category import categorize
 # --- generic helpers ------------------------------------------------------
 
 _PROJECT_NAME_RE = re.compile(
-    r"([A-Z][A-Za-z /\-]+ \u2014 [A-Za-z ]+ Pkg-\d+)"
+    r"([A-Z][A-Za-z0-9 /\-&',]+\s*(?:[\u2013\u2014-]|--)\s*[A-Za-z0-9 /\-&',]+\s+Pkg-\d+)"
 )
 _CLIENT_LINE_RE = re.compile(
     r"(?:Client|Employer|Department|Issued by)\s*:\s*(.+)", re.IGNORECASE
@@ -29,51 +29,94 @@ _CLIENT_LINE_RE = re.compile(
 _ROLE_RE = re.compile(r"\b(Prime|Sub-?contractor|Joint Venture|JV)\b", re.IGNORECASE)
 _REF_NO_RE = re.compile(r"Ref(?:erence)?\.?\s*No\.?\s*[:\-]?\s*([A-Za-z0-9/\-]+)")
 
+def extract_project_name(text: str) -> str:
+    # 1. Try regex with flexible dashes
+    match = _PROJECT_NAME_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    # 2. Try looking for line after Name of Work
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        if "Name of Work" in line and i + 1 < len(lines):
+            val = lines[i+1].strip()
+            if val:
+                return val
+    return None
+
+def extract_client_name(text: str) -> str:
+    match = _CLIENT_LINE_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    # First non-empty line that isn't a page/doc boundary
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    for line in lines:
+        if line.startswith("--- page") or line.startswith("--- Page") or "CONFIDENTIAL" in line:
+            continue
+        return line
+    return None
+
+def extract_engineer_name(text: str) -> str:
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        if "Contractor's Project Manager" in line and i + 1 < len(lines):
+            val = lines[i+1].strip()
+            if val:
+                return val
+    match = re.search(r"supervised on the contractor's side by\s+([A-Z][a-zA-Z\. ]+)", text, re.I)
+    if match:
+        return match.group(1).strip()
+    return None
 
 def extract_completion_certificate(text: str) -> dict:
     """completion_certificate: value, dates, client, written grading."""
-    project_name_match = _PROJECT_NAME_RE.search(text)
-    client_match = _CLIENT_LINE_RE.search(text)
+    proj_name = extract_project_name(text)
+    client_name = extract_client_name(text)
+    engineer_name = extract_engineer_name(text)
     role_match = _ROLE_RE.search(text)
 
     return {
-        "project_name": project_name_match.group(1) if project_name_match else None,
-        "client_raw": client_match.group(1).strip() if client_match else None,
+        "project_name": proj_name,
+        "client_raw": client_name,
+        "engineer_name": engineer_name,
         "value_rupees": parse_money(text),
-        "completion_date": parse_date(text),  # NOTE: tighten with a label-anchored
-                                               # search (e.g. text after "Completion Date:")
-                                               # once you see real layouts -- a bare
-                                               # parse_date(text) will grab the FIRST
-                                               # date-like substring, which may not be
-                                               # the completion date on a dense certificate.
+        "completion_date": parse_date(text),
         "grading": normalize_grading(text),
         "role": role_match.group(1) if role_match else None,
-        "category": categorize(project_name_match.group(1)) if project_name_match else "other",
+        "category": categorize(proj_name) if proj_name else "other",
     }
 
 
 def extract_reference_letter(text: str) -> dict:
     """reference_letter: existence is itself the signal (see graph/build_graph.py) --
     this just pulls the project it refers to, for linking."""
-    project_name_match = _PROJECT_NAME_RE.search(text)
+    proj_name = extract_project_name(text)
     return {
-        "project_name": project_name_match.group(1) if project_name_match else None,
+        "project_name": proj_name,
     }
 
 
 def extract_personnel_certificate(text: str) -> dict:
     """personnel_certificate: engineer name, cert type, issue date."""
-    # NOTE: placeholder patterns -- tune against real documents. Certs
-    # likely have "Awarded to: <name>" and "Certification: PMP" style
-    # lines; without real samples these are best-guess anchors.
-    name_match = re.search(r"(?:Awarded to|Name)\s*:\s*([A-Z][a-zA-Z\. ]+)", text)
+    lines = text.split('\n')
+    engineer_name = None
+    for i, line in enumerate(lines):
+        if "This is to certify that" in line and i + 1 < len(lines):
+            val = lines[i+1].strip()
+            if val:
+                engineer_name = val
+                break
+    if not engineer_name:
+        name_match = re.search(r"(?:Awarded to|Name)\s*:\s*([A-Z][a-zA-Z\. ]+)", text)
+        if name_match:
+            engineer_name = name_match.group(1).strip()
+            
     cert_type_match = re.search(
         r"\b(PMP|Six Sigma (?:Black|Green) Belt|PRINCE2|ISO \d+ Lead Auditor)\b",
         text,
     )
     cert_number_match = re.search(r"(?:Cert(?:ificate)?\.?\s*No\.?|PMI-\d+)", text)
     return {
-        "engineer_name": name_match.group(1).strip() if name_match else None,
+        "engineer_name": engineer_name,
         "cert_type": cert_type_match.group(1) if cert_type_match else None,
         "issue_date": parse_date(text),
     }
@@ -81,10 +124,22 @@ def extract_personnel_certificate(text: str) -> dict:
 
 def extract_cv(text: str) -> dict:
     """cv: which works this engineer led."""
-    name_match = re.search(r"(?:Name|Engineer)\s*:\s*([A-Z][a-zA-Z\. ]+)", text)
+    lines = text.split('\n')
+    engineer_name = None
+    for i, line in enumerate(lines):
+        if "Name" in line and i + 1 < len(lines):
+            val = lines[i+1].strip()
+            if val and not val.startswith("Curriculum") and not val.startswith("Employee"):
+                engineer_name = val
+                break
+    if not engineer_name:
+        name_match = re.search(r"(?:Name|Engineer)\s*:\s*([A-Z][a-zA-Z\. ]+)", text)
+        if name_match:
+            engineer_name = name_match.group(1).strip()
+            
     project_names = _PROJECT_NAME_RE.findall(text)
     return {
-        "engineer_name": name_match.group(1).strip() if name_match else None,
+        "engineer_name": engineer_name,
         "projects_led": project_names,
     }
 

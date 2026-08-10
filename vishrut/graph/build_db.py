@@ -45,11 +45,24 @@ def run_build(db_path="graph.sqlite"):
         if doc_type not in field_extractors.EXTRACTORS:
             continue
             
-        txt_path = EXTRACTED_TEXT_ROOT / doc_type / f"{doc_id}.txt"
-        if not txt_path.exists():
-            continue
-            
-        text = txt_path.read_text(encoding="utf-8")
+        pdf_path = WORKSPACE_ROOT / "documents" / entry["filename"]
+        text = ""
+        if pdf_path.exists():
+            import fitz
+            try:
+                doc = fitz.open(pdf_path)
+                text = "\n".join([page.get_text() for page in doc])
+                doc.close()
+            except Exception as e:
+                print(f"Error reading PDF {pdf_path}: {e}")
+        
+        if not text:
+            txt_path = EXTRACTED_TEXT_ROOT / doc_type / f"{doc_id}.txt"
+            if txt_path.exists():
+                text = txt_path.read_text(encoding="utf-8")
+            else:
+                continue
+                
         extracted = field_extractors.extract(doc_type, text)
         extracted["doc_id"] = doc_id
         

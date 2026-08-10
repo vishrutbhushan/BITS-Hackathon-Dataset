@@ -11,8 +11,8 @@ never drifts from float rounding error.
 import re
 from decimal import Decimal, InvalidOperation
 
-_CR_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*([\d,]+(?:\.\d+)?)\s*Cr\b", re.IGNORECASE)
-_LAKH_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*([\d,]+(?:\.\d+)?)\s*Lakh\b", re.IGNORECASE)
+_CR_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*([\d,]+(?:\.\d+)?)\s*(?:Cr(?:ore)?s?)\b", re.IGNORECASE)
+_LAKH_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*([\d,]+(?:\.\d+)?)\s*(?:Lakh?s?)\b", re.IGNORECASE)
 # Indian digit grouping: 33,38,00,000 -- groups of 2 after the first group of 3
 _INDIAN_GROUPED_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*(\d{1,2}(?:,\d{2})*,\d{3})\b")
 _RAW_INT_RE = re.compile(r"(?:INR|Rs\.?|\u20b9)?\s*(\d{6,})\b")  # 6+ digits, unformatted
