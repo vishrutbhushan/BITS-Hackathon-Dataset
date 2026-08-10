@@ -98,7 +98,7 @@ must be read out of that project's own certificate. Four documents minimum, ofte
 
 ## What the questions look like
 
-All 23 examples are in `sample_questions.json`, with answers and a step-by-step derivation. Three of
+All 21 examples are in `sample_questions.json`, with answers and a step-by-step derivation. Three of
 them:
 
 > **Regarding Asha Nair’s PMP work on the Cable Stayed Bridge — Jharkhand Pkg-115, what is the defensible average size across all completed projects for the commissioning client?**

@@ -1,9 +1,9 @@
 {
-  "set_id": "hidden_set_v1.2",
+  "set_id": "hidden_set_v1.3",
   "domain": "infrastructure_construction",
   "company": "National Infrastructure Corp. Ltd.",
   "frozen": "2026-08-10",
-  "n_questions": 320,
+  "n_questions": 248,
   "note": "Questions only. Answers are plain numbers.",
   "questions": [
     {
@@ -37,24 +37,9 @@
       "answer_type": "percent"
     },
     {
-      "qid": "HV-IC-0011",
-      "question": "meera, what pct of her total deliveries went to her top client?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0012",
-      "question": "Regarding Pooja Sen and Sanjay Joshi\u2019s Suvarna Projects Limited assignments, how many completed projects have both engineers delivered?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0014",
       "question": "I\u2019m pretty sure Pooja Bose\u2019s PMP for the Madhya Pradesh water plant was issued back in March 2021, but do you know how many days actually elapsed before that project wrapped up?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0016",
-      "question": "I\u2019m fairly certain Priya Patel and Amit Mukherjee both covered the Irrigation & Waterways Dept, Govt of Rajasthan portfolio, but I want to verify my memory\u2014did they actually share that exact same government client, and if so, how many finished projects are we counting for both of them combined?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0017",
@@ -67,11 +52,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0019",
-      "question": "Priya, could you confirm the verified delivered value for your two largest client relationships?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0020",
       "question": "PMP; Farhan Rao, could you please confirm the total number of distinct work categories he has successfully led to completion?",
       "answer_type": "count"
@@ -80,11 +60,6 @@
       "qid": "HV-IC-0021",
       "question": "What is the net difference in the value of work completed for Meridian Constructors & Co. between 2020 and 2022?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0022",
-      "question": "I\u2019m reviewing the Trishakti Power Generation Corporation account and the initial tally feels off\u2014could you verify the exact count of finished projects Farhan Roy and Lakshmi Ghosh both delivered under their PMP credentials for that specific client?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0023",
@@ -117,11 +92,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0029",
-      "question": "Meera Banerjee, quick question while I\u2019m sorting through her file \u2014 still getting my bearings here, how do I figure out what percentage of her total deliveries went to her single biggest account, and should I just give that as a number out of 100?",
-      "answer_type": "percent"
-    },
-    {
       "qid": "HV-IC-0030",
       "question": "I\u2019m looking at the scope figure on Suresh Das\u2019s Six Sigma Black Belt entry for Road Widening \u2014 Odisha Pkg-98, but I know that\u2019s just the single-job number, not the real baseline for their account\u2014what\u2019s the actual average size across every project we\u2019ve wrapped up for that client?",
       "answer_type": "money"
@@ -140,11 +110,6 @@
       "qid": "HV-IC-0033",
       "question": "Could you walk me through how to calculate the rupee difference between the mean and the median contract value for all the completed works under the client for Tanvir Menon's Six Sigma Black Belt assignment on the Rajasthan Pkg-58 water treatment plant, and make sure the final number is negative if the mean is lower?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0034",
-      "question": "Chandan Banerjee\u2019s file shows a few different metrics, but I\u2019m pretty sure the headline figure isn\u2019t what we actually need for the bid, so how do I calculate the exact percentage of his total deliveries that went to his single biggest client and should I just round that to a whole number out of 100?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0036",
@@ -197,11 +162,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0047",
-      "question": "Lakshmi Ghosh and Sanjay Joshi both covered the Maharashtra Municipal Corporation account, but what\u2019s the combined count of finished projects they delivered there before the submission window closes in twenty minutes?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0048",
       "question": "Could you please calculate the aggregate value of the works Suresh Desai led that reached completion after his PMP was issued on 2021-03-10?",
       "answer_type": "money"
@@ -242,19 +202,9 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0057",
-      "question": "Tanvir, I\u2019m still getting my bearings on how we track the bid metrics, but could you let me know what the delivered value comes to when you add his two largest client relationships?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0059",
       "question": "PMP issued 2021-03-10; Rahul Menon; Material Handling Plant \u2014 Uttar Pradesh Pkg-89, cross-checking against the timeline, what is the count from that issue to the completion date?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0060",
-      "question": "Regarding Meera Roy\u2019s initial engagement with Jal Nigam, Uttar Pradesh, could you confirm the total number of completed works we hold for that client, specifically aggregating the PMP-certified projects delivered by both Meera Roy and Tanvir Malhotra?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0061",
@@ -265,21 +215,6 @@
       "qid": "HV-IC-0063",
       "question": "pmp; manoj verma, how many work categories has he actually wrapped up?",
       "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0065",
-      "question": "Meera Banerjee\u2019s account breakdown is still a bit of a learning curve for me, but could you let me know what the delivered value comes to for her top two accounts?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0067",
-      "question": "sunita, what\u2019s the total delivered value for your top two clients?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0068",
-      "question": "Rahul Das, how do I calculate the percentage of his total deliveries that went to his single biggest client as a number out of 100 for the bid deadline from his four accounts?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0071",
@@ -302,19 +237,9 @@
       "answer_type": "count"
     },
     {
-      "qid": "HV-IC-0075",
-      "question": "Lakshmi Ghosh, could you please confirm the percentage of her total delivered assignments that were directed to her largest client, stated as a whole number out of one hundred?",
-      "answer_type": "percent"
-    },
-    {
       "qid": "HV-IC-0076",
       "question": "rahul das mp pkg-49 rigid pavement pmp issued march 10 2021, days to completion?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0078",
-      "question": "Farhan Rao\u2019s account, quick check while I\u2019m going through his deliveries \u2014 I\u2019m pretty sure his largest client took up the majority of his total, but can you just confirm whether my recollection is right on what the exact percentage out of a hundred should be?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0080",
@@ -332,16 +257,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0083",
-      "question": "I\u2019m pretty sure Meera Chatterjee and Gautam Joshi both covered the National Expressway Development Authority account under their PMP credentials, but I want to verify whether my recollection is right\u2014what\u2019s the total number of finished projects they delivered for that client?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0084",
-      "question": "Rajesh Rao and Sunita Joshi both covered the National Expressway Development Authority account, but what\u2019s the combined tally of closed engagements they both handled under their Six Sigma and PMP qualifications?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0085",
       "question": "I\u2019m pretty sure Suvarna Projects Limited\u2019s work completed value was sitting near 380 crores back in 2018, but I want to verify my recollection\u2014what\u2019s the actual variance between that 2018 number and their 2021 figure?",
       "answer_type": "money"
@@ -355,11 +270,6 @@
       "qid": "HV-IC-0088",
       "question": "Kavita Reddy\u2019s PMP for the Process Piping Package \u2014 Delhi Pkg-75 is in my hand, but I\u2019m still figuring out the bid desk workflow, so how do I actually calculate the rupee difference between the average and median for every completed job under that client, and should I leave it negative if the average turns out smaller?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0089",
-      "question": "Priti Pillai, I reviewed the initial readout for your account and the headline figure looks too clean to be accurate for the bid, so how do I actually calculate the exact share of your total deliveries that went to your single largest client as a whole number out of a hundred?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0090",
@@ -412,16 +322,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0102",
-      "question": "Rajesh Rao\u2019s file is on my desk, but I\u2019m still getting my head around how we track these figures\u2014what\u2019s the combined delivered value for his two biggest client relationships?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0103",
-      "question": "I\u2019m trying to verify if my memory is right on Tanvir Menon\u2019s account breakdown\u2014could you just confirm whether the delivered value for his largest two client relationships actually adds up to what I\u2019m recalling?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0104",
       "question": "I saw the preliminary number you ran for Mega Infrastructure Authority, but that doesn\u2019t look right\u2014did you actually cross-check the final completed values to see how much the largest one exceeds the second?",
       "answer_type": "money"
@@ -430,11 +330,6 @@
       "qid": "HV-IC-0105",
       "question": "Trishakti Power Generation Corporation has a few bids hitting the twenty-five crore mark, but I need the combined value of those clearing that threshold before the submission window closes\u2014can you pull that figure for me?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0107",
-      "question": "Kavita Reddy and Rahul Menon covered the Irrigation & Waterways Dept, Govt of West Bengal account under PMP credentials, but what is the count of completed engagements we hold for that client against our tally?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0110",
@@ -460,11 +355,6 @@
       "qid": "HV-IC-0115",
       "question": "I suspect that number on Meera Banerjee\u2019s PMP for the Pumping Station \u2014 Tamil Nadu Pkg-16 only covers this specific site, so what\u2019s the properly-derived average size across all the completed work we\u2019ve delivered for whoever brought us on board?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0117",
-      "question": "rohit singh, what percentage of his deliveries went to his top client as a whole number out of 100?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0118",
@@ -507,19 +397,9 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0126",
-      "question": "Pooja Bose and Suresh Chopra, both PMPs, need the total count of closed engagements for Mahanadi Steel Corporation they've both handled to finalize the bid\u2014what's the figure?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0127",
       "question": "I\u2019m up against a submission deadline for the Irrigation & Waterways Dept, Govt of West Bengal, so what\u2019s the outstanding contract value we still need to secure from them to clear the 120 Cr credential threshold?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0128",
-      "question": "meera and uma covered mega infrastructure authority under their pmp and six sigma, what\u2019s the figure we hold?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0129",
@@ -534,16 +414,6 @@
     {
       "qid": "HV-IC-0131",
       "question": "Maharashtra Municipal Corporation; excluding industrial epc \u2014 what is the net contract value for the remaining scope ahead of our submission deadline?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0132",
-      "question": "Tanvir Menon and Meera Banerjee both logged PMP-certified assignments for the Irrigation & Waterways Dept, Govt of Rajasthan, but what\u2019s the exact count of completed works they\u2019ve both delivered to clear the submission cutoff?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0133",
-      "question": "I\u2019m fairly certain Divya Singh\u2019s delivered value for her two biggest relationships sits at a particular figure, but I\u2019m fuzzy on the exact split\u2014could you just verify whether that combined total actually matches what I\u2019m recalling?",
       "answer_type": "money"
     },
     {
@@ -577,24 +447,9 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0142",
-      "question": "Sanjay Joshi, I\u2019m racing the submission deadline and need the exact percentage of everything he has delivered that went to his single largest client, stated as a whole number out of 100, before we lock the bid.",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0143",
-      "question": "farhan and naveen covered gujarat pw, what\u2019s the total count of completed works we hold for them?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0144",
       "question": "I\u2019m prepping the audit response, so what is the exact span from the March 10, 2021 PMP issuance for Naveen Roy\u2019s Handpump Installation \u2014 Uttar Pradesh Pkg-134 through to the final completion date?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0145",
-      "question": "Pooja Bose\u2019s breakdown is still a bit hazy on my end\u2014am I right in recalling that her delivered value for the two largest client relationships actually adds up to what I\u2019m thinking?",
-      "answer_type": "money"
     },
     {
       "qid": "HV-IC-0146",
@@ -622,11 +477,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0154",
-      "question": "Pooja Bose and Amit Iyer both handled Mahanadi Steel Corporation under their PMP and Six Sigma Black Belt credentials\u2014what\u2019s the combined tally of closed deliverables we need to lock in before the submission cutoff?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0155",
       "question": "What\u2019s the auditable net shift in the Public Works Department, Govt of Gujarat\u2019s completed work value from 2016 through 2018?",
       "answer_type": "money"
@@ -637,11 +487,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0157",
-      "question": "I'm still getting used to how we roll these up\u2014could you just tell me what Priya's top two client relationships add up to in terms of delivered value?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0158",
       "question": "Can you calculate the exact span from Farhan Rao\u2019s March 10, 2021 PMP issue date to the final completion mark for the Uttar Pradesh Pkg-26 material handling plant before we hit the submission deadline?",
       "answer_type": "days"
@@ -649,11 +494,6 @@
     {
       "qid": "HV-IC-0159",
       "question": "Trishakti Power Generation Corporation; excluding expressways \u2014 what value matches the cross-check against the portfolio?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0160",
-      "question": "Rahul, I know the system flags a straightforward total for his top accounts, but that number feels off\u2014could you just confirm what the actual sum is for his top two accounts?",
       "answer_type": "money"
     },
     {
@@ -677,11 +517,6 @@
       "answer_type": "days"
     },
     {
-      "qid": "HV-IC-0166",
-      "question": "Rahul Das, I\u2019m cross-checking against the rollup and need the delivered value sum for his two client relationships?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0167",
       "question": "Suresh Das\u2019s Six Sigma Black Belt for the Road Widening \u2014 Odisha Pkg-98 points to a specific client, so what\u2019s the rupee difference between the average and median contract values for all their completed jobs right now, and should I leave it negative if the average dips below the median before we lock this submission?",
       "answer_type": "money"
@@ -690,11 +525,6 @@
       "qid": "HV-IC-0172",
       "question": "National Expressway Development Authority, what is the exact surplus value separating our highest-value finished contract from the next one down?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0173",
-      "question": "Amit Iyer's total deliveries are going into the bid package, but what is the exact percentage out of a hundred that went to his single largest client before we lock the submission?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0175",
@@ -715,11 +545,6 @@
       "qid": "HV-IC-0178",
       "question": "sanjay joshi's pmp: what's the rupee mean-median gap for his client's works, negative if mean is lower?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0179",
-      "question": "I\u2019m looking at the preliminary tally for Imran and Rajesh\u2019s Odisha Public Health Engineering portfolio, but that number\u2019s clearly just their individual project counts stacked together\u2014what\u2019s the actual figure for the completed assignments they both delivered to the department?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0180",
@@ -762,11 +587,6 @@
       "answer_type": "percent"
     },
     {
-      "qid": "HV-IC-0190",
-      "question": "I\u2019m pretty sure we\u2019ve got four completed works logged for both Neha and Imran under the Maharashtra PWD, but is that the exact number we\u2019re holding?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0191",
       "question": "Subarnarekha Valley Corporation is still a bit of a puzzle for me, so could you help me figure out the combined value of only the assignments that clear the two crore mark?",
       "answer_type": "money"
@@ -807,29 +627,14 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0199",
-      "question": "Asha Nair, I\u2019m still learning how we compile her proposals\u2014could you help me figure out what her two biggest client relationships come to when you combine their delivered value?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0200",
       "question": "how many days from lakshmi's mar 10 pmp for the mp pkg-42 widening to handover?",
       "answer_type": "days"
     },
     {
-      "qid": "HV-IC-0201",
-      "question": "Gautam Joshi, what\u2019s the precise delivered value sum for your two largest client relationships that I should cite to satisfy the auditor\u2019s breakdown?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0202",
       "question": "Public Health Engineering Dept, Odisha has several assignments in our pipeline, and could you please calculate the combined value of those meeting or exceeding the eighteen crore threshold for our submission file?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0204",
-      "question": "Suresh Chopra, what is the exact whole-number percentage out of a hundred that his single largest client accounts for across all his delivered work?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0206",
@@ -839,11 +644,6 @@
     {
       "qid": "HV-IC-0207",
       "question": "Regarding Meera Roy\u2019s PMP issued on March 10, 2021, what is the precise combined value of the assignments she directed that wrapped up after that date?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0208",
-      "question": "I\u2019m pretty sure Naveen Roy\u2019s two biggest client relationships come to a specific delivered value, but I want to check if my recollection is right\u2014could you just confirm what that figure is?",
       "answer_type": "money"
     },
     {
@@ -860,11 +660,6 @@
       "qid": "HV-IC-0212",
       "question": "mega infra authority contract value seems high, can you pull the delta between secured work and submitted claims?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0213",
-      "question": "Tanvir Menon and Tanvir Malhotra both served Trishakti Power Generation Corporation\u2014what\u2019s the verified count of completed assignments we hold that were delivered by both of them?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0214",
@@ -887,19 +682,9 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0219",
-      "question": "neha chopra, what whole number out of 100 is her top client\u2019s cut of all her deliveries?",
-      "answer_type": "percent"
-    },
-    {
       "qid": "HV-IC-0220",
       "question": "peninsular petroleum bids, what\u2019s the sum for anything hitting fifteen crore or more?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0221",
-      "question": "Submission\u2019s due in twenty minutes\u2014Amit Mukherjee and Naveen Roy both covered Trishakti Power Generation Corporation under their PMP credentials, but what\u2019s the total count of closed assignments we\u2019re holding that both of them delivered?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0222",
@@ -942,16 +727,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0230",
-      "question": "Amit Iyer, I\u2019m just pulling his file now and want to make sure I\u2019m reading the totals right\u2014could you tell me what the combined delivered value is for his two largest client relationships?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0231",
-      "question": "I\u2019m finalizing the audit response for Lakshya Engineering & Construction and need the defensible overlap figure for the completed assignments Neha Chopra and Divya Singh both handled\u2014what\u2019s the verified count?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0232",
       "question": "I\u2019m looking at the draft breakdown for Peninsular Petroleum Corporation, but that initial figure seems off\u2014could you verify the actual calculation to see how much our top finished contract beats the one just behind it by?",
       "answer_type": "money"
@@ -975,11 +750,6 @@
       "qid": "HV-IC-0236",
       "question": "Tamil Nadu Municipal Corporation is coming up in my head and I have a half-remembered sense of how much our top finished contract there beats the second one, but I want to verify if my memory is right\u2014could you confirm the exact figure?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0238",
-      "question": "Imran Joshi, I saw the rough split circulating but that\u2019s clearly not the calculated figure we need, so what percentage out of a hundred of his overall delivery volume actually went to his top client?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0240",
@@ -1012,29 +782,9 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0250",
-      "question": "Uma Sen, what is the percentage out of 100 that represents the proportion of her total project output directed to her primary account?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0251",
-      "question": "sunita, what percentage out of 100 went to her top client across all her work?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0252",
-      "question": "I\u2019m not convinced that initial figure holds up\u2014could you walk me through how you actually derived the combined delivered value for Rohit Singh\u2019s top two accounts?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0253",
       "question": "Hey, I\u2019m still getting my bearings with the bid workflow \u2014 for the Maharashtra PWD projects, what\u2019s the whole number out of a hundred that represents the portion of our work backed by a client reference?",
       "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0254",
-      "question": "deepa chatterjee and sunita joshi both covered suvarna projects limited\u2014how many completed projects do we hold for that overlap?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0255",
@@ -1060,16 +810,6 @@
       "qid": "HV-IC-0260",
       "question": "I\u2019m reviewing Farhan Roy\u2019s PMP credential for the Stormwater Drainage \u2014 Gujarat Pkg-80 scope with Trishakti Power Generation Corporation, but I\u2019m fairly certain just copying that one line item will tank our margin\u2014what\u2019s the actual combined value of every completed assignment he\u2019s delivered to them?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0261",
-      "question": "Amit Mukherjee, what percentage out of 100 of his total delivered scope actually went to his largest account?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0262",
-      "question": "Priya Patel, I\u2019m still learning how we usually calculate these splits, but when we look at her full portfolio, what percentage out of a hundred of her total assignments actually went to her biggest account?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0263",
@@ -1107,18 +847,8 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0272",
-      "question": "Suresh Desai, what percentage out of a hundred of his total deliverables was allocated to his foremost client?",
-      "answer_type": "percent"
-    },
-    {
       "qid": "HV-IC-0273",
       "question": "When I\u2019m prepping the National Expressway Development Authority breakdown and need to exclude the industrial epc segment, what\u2019s the auditable figure I should stand behind for client verification?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0274",
-      "question": "Chandan, that initial figure doesn't look right\u2014could you actually work out the delivered value for his top two relationships and tell me what they total?",
       "answer_type": "money"
     },
     {
@@ -1140,11 +870,6 @@
       "qid": "HV-IC-0280",
       "question": "I\u2019m half-remembering that the total for Rajesh Rao\u2019s completed work with the Public Health Engineering Dept, Odisha is just the School Building \u2014 Odisha Pkg-136 line item on his PMP (PMI-200031), but I want to confirm whether that\u2019s right or if I\u2019m missing other assignments\u2014what\u2019s the actual combined value?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0281",
-      "question": "Quick question while I\u2019m grabbing this file\u2014I\u2019m still new to the bid desk, but since both Meera Roy and Naveen Roy handled the Public Health Engineering Dept, Odisha account, how many completed projects do we hold that they both delivered together?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0282",
@@ -1252,16 +977,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0307",
-      "question": "I\u2019m fairly certain Asha Nair and Priti Pillai both handled the Mega Infrastructure Authority account under their PMP credentials, but I want to verify my recollection\u2014how many completed assignments do we actually hold that both of them delivered?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0309",
-      "question": "Neha Chopra, I\u2019m trying to pin down a figure for her, and I\u2019m fairly certain it\u2019s the delivered value for her top two relationships added together, but I want to make sure my recollection is accurate\u2014could you just confirm what that combined total is?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0310",
       "question": "subarnarekha valley corp 2016 vs 2017\u2014what\u2019s the delta on completed work value?",
       "answer_type": "money"
@@ -1297,11 +1012,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0317",
-      "question": "Lakshmi Ghosh and Priya Gupta both managed the Tamil Nadu Municipal Corporation account under their PMP credentials, so could you please confirm the total number of completed assignments we hold that fall under this shared client coverage?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0318",
       "question": "The preliminary tally for Meera's March 10, 2021 PMP on the Tamil Nadu Pkg-9 WTP augmentation doesn't quite add up\u2014could you calculate the actual number of days from that certification issuance to the final handover?",
       "answer_type": "days"
@@ -1310,11 +1020,6 @@
       "qid": "HV-IC-0319",
       "question": "Public Works Department, Govt of Maharashtra; excluding sewerage drainage\u2014I keep seeing the gross figure floating around, but I know that\u2019s still bundling the drainage scope, so what\u2019s the actual derived value we should be standing behind?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0320",
-      "question": "Cross-checking Suresh Das allocations against the master ledger, what percentage out of 100 went to the top account?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0322",
@@ -1457,16 +1162,6 @@
       "answer_type": "percent"
     },
     {
-      "qid": "HV-IC-0353",
-      "question": "Priya Gupta, when we aggregate her complete delivery tally across her assigned accounts, what percentage out of a hundred of her overall output actually went to her top client?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0354",
-      "question": "Priti Pillai, could you please calculate the sum of the delivered value across her two largest client engagements and confirm the final figure for our records?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0356",
       "question": "National Special Projects Office is on my desk, and I need the exact amount by which our highest-value completed assignment for them exceeds the next one down\u2014could you calculate that figure?",
       "answer_type": "money"
@@ -1474,21 +1169,6 @@
     {
       "qid": "HV-IC-0357",
       "question": "for odisha phed, what\u2019s the out of 100 figure for projects with client approval?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0358",
-      "question": "Suresh, what\u2019s the combined delivered value for his top two accounts right now so I can lock the bid submission?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0359",
-      "question": "Meera Chatterjee and Sunita Joshi both covered Mahanadi Steel Corporation, but how many completed projects do we hold that they both delivered for that account right now to lock the bid submission?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0360",
-      "question": "Rahul Menon, bid submission is in twenty minutes\u2014what percentage out of a hundred of his total output actually went to his single largest client?",
       "answer_type": "percent"
     },
     {
@@ -1502,34 +1182,14 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0363",
-      "question": "Pooja Bose, I'm half-remembering the breakdown for her primary client\u2014what percentage of her total output does that account represent?",
-      "answer_type": "percent"
-    },
-    {
-      "qid": "HV-IC-0364",
-      "question": "Lakshmi, I\u2019m still getting my head around the bid metrics here\u2014could you just tell me what the combined delivered value comes to for her top two client relationships?",
-      "answer_type": "money"
-    },
-    {
       "qid": "HV-IC-0368",
       "question": "I\u2019m still getting my bearings on how we track these, but could you tell me how many days elapsed from Naveen\u2019s March 10, 2021 PMP for the Uttar Pradesh Pkg-31 STP site until the work actually wrapped up?",
       "answer_type": "days"
     },
     {
-      "qid": "HV-IC-0370",
-      "question": "Tanvir Menon, I am matching his project completions against the client roster, what percentage out of 100 of his output went to the top account?",
-      "answer_type": "percent"
-    },
-    {
       "qid": "HV-IC-0371",
       "question": "Public Health Engineering Dept, Odisha has awarded us a few projects, but am I right that my recollection is correct about how much of the total value is still sitting above what we\u2019ve actually invoiced?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0372",
-      "question": "Tanvir, pulling together your full delivery slate, what percentage out of a hundred went to the single account that claimed the largest portion?",
-      "answer_type": "percent"
     },
     {
       "qid": "HV-IC-0373",
@@ -1552,16 +1212,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0378",
-      "question": "I\u2019m still wrapping my head around how we track past bids, but since both Chandan Banerjee and Farhan Rao handled the Trishakti Power Generation Corporation account under their PMP credentials, could you let me know how many finished assignments we hold that they both delivered?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0379",
-      "question": "I'm still getting my bearings with how we track past assignments, but I've got Neha's file open here\u2014since she and Asha Nair both covered the Central Works & Buildings Bureau, could you let me know how many finished projects we actually hold that they both delivered for that account?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0380",
       "question": "PMP; Tanvir Menon, what\u2019s the exact count of distinct work categories he\u2019s personally led to completion before we lock the submission?",
       "answer_type": "count"
@@ -1574,16 +1224,6 @@
     {
       "qid": "HV-IC-0382",
       "question": "I\u2019m just picking up Lakshya Engineering & Construction\u2019s file here and trying to figure out how to calculate the unbilled portion of their total project value\u2014could you walk me through the steps to get from that figure down to what we\u2019ve actually invoiced?",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0383",
-      "question": "Deepa Chatterjee, I need the delivered value sum for her two client engagements to cross-check against the bid submission.",
-      "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0384",
-      "question": "Uma Sen, that figure circulating for her portfolio is definitely off, so what\u2019s the actual combined delivered value for her two largest client relationships once you properly aggregate it?",
       "answer_type": "money"
     },
     {
