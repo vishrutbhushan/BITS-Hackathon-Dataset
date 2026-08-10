@@ -53,7 +53,10 @@ class SubtaskRetriever:
                     return r_c[0][0].strip(' ,.')
             except Exception:
                 pass
-        return ""
+        raise ValueError(
+            "Client resolution failed; refusing to execute a client-scoped query "
+            "because an empty client would match the entire database."
+        )
 
     def execute_plan(self, plan: ExecutionPlan) -> RetrievalContext:
         results = []
@@ -459,6 +462,10 @@ class SubtaskRetriever:
                     gap = abs(target - t1_sum)
                     res.computed_value = gap
                     res.summary = f"Gap: |{target} - {t1_sum}| = {gap} INR."
+                elif metric == "passthrough":
+                    prev = [r.computed_value for r in results if r.computed_value is not None]
+                    res.computed_value = prev[-1] if prev else None
+                    res.summary = f"Using the deterministic result from the previous task: {res.computed_value}."
                 else:
                     prev = [r.computed_value for r in results if r.computed_value is not None]
                     res.computed_value = prev[-1] if prev else None

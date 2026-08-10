@@ -96,7 +96,7 @@ class BidIntelligencePipeline:
         # Write output based on extension (.csv vs .jsonl)
         if str(output_file).endswith(".csv"):
             with open(output_file, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
+                writer = csv.writer(f, lineterminator="\n")
                 writer.writerow(["question_id", "answer"])
                 for item in submissions:
                     writer.writerow([item["question_id"], item["answer"]])

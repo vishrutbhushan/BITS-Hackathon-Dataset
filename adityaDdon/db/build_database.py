@@ -34,14 +34,47 @@ def normalize_inr(raw):
     if raw is None:
         return 0
     raw_str = str(raw).strip()
-    m_cr = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d.]+)\s*(?:Cr|crore)', raw_str, re.I)
+    m_cr = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:Cr|crore)', raw_str, re.I)
     if m_cr:
-        return int(round(float(m_cr.group(1)) * 10_000_000))
-    m_lakh = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d.]+)\s*(?:Lakh|lakh)', raw_str, re.I)
+        return int(round(float(m_cr.group(1).replace(',', '')) * 10_000_000))
+    m_lakh = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:Lakh|lakh)', raw_str, re.I)
     if m_lakh:
-        return int(round(float(m_lakh.group(1)) * 100_000))
+        return int(round(float(m_lakh.group(1).replace(',', '')) * 100_000))
     digits = re.sub(r'[^\d]', '', raw_str)
     return int(digits) if digits else 0
+
+
+def extract_labeled_inr(text):
+    """Read the most precise amount following a project-value label.
+
+    Client certificates sometimes include both an exact Indian-grouped INR
+    amount and a rounded crore rendering. The exact representation must win.
+    """
+    label_re = re.compile(
+        r'(?:gross\s+executed\s+value|final\s+executed\s+amount|executed\s+value|contract\s+value|awarded\s+value)',
+        re.I,
+    )
+    for label in label_re.finditer(text):
+        window = text[label.end():label.end() + 180]
+
+        # Require at least two commas so a lakh value such as 3,338.00 is not
+        # mistaken for a raw rupee integer before its unit is applied.
+        grouped = re.search(r'(?:INR|Rs\.?|₹)?\s*(\d{1,3}(?:,\d{2,3}){2,})', window, re.I)
+        if grouped:
+            return int(grouped.group(1).replace(',', ''))
+
+        unit_value = re.search(
+            r'(?:INR|Rs\.?|₹)?\s*[\d,]+(?:\.\d+)?\s*(?:Cr|crore|Lakh|lakhs?)\b',
+            window,
+            re.I,
+        )
+        if unit_value:
+            return normalize_inr(unit_value.group(0))
+
+        raw_value = re.search(r'(?:INR|Rs\.?|₹)\s*(\d{6,})\b', window, re.I)
+        if raw_value:
+            return int(raw_value.group(1))
+    return 0
 
 def clean_client_name(name):
     if not name:
@@ -170,7 +203,8 @@ def build():
         if pkg_num:
             client_cc_map[pkg_num] = {
                 "doc_id": p.stem,
-                "grade": grade
+                "grade": grade,
+                "val_inr": extract_labeled_inr(text),
             }
 
     # 6. Extract Master 155 Works from Past Performance Portfolio (DOC-PPP-001.pdf)
@@ -309,7 +343,7 @@ def build():
 
         canonical_client = ppp.get("canonical_client") or ccc.get("client") or "National Special Projects Office"
         category = ccc.get("category") or ppp.get("category") or "Civil Construction"
-        val_inr = ccc.get("val_inr") or ppp.get("val_inr") or 0
+        val_inr = cc.get("val_inr") or ccc.get("val_inr") or ppp.get("val_inr") or 0
         val_cr = round(val_inr / 10_000_000, 2)
         comp_date = ccc.get("comp_date") or ppp.get("comp_date") or "2020-01-01"
         comp_year = int(comp_date[:4]) if comp_date and len(comp_date) >= 4 else 2020

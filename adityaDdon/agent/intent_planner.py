@@ -62,17 +62,17 @@ CATEGORY_MAP = [
 ]
 
 CLIENT_ALIASES = [
-    (r'\bpheg\s*gujarat\b|\bphed\s*gujarat\b|\bgujarat\s*phed\b|\bgujarat\s*pheg\b', "Public Health Engineering Dept, Gujarat"),
-    (r'\bpheg\s*odisha\b|\bphed\s*odisha\b|\bodisha\s*phed\b|\bodisha\s*pheg\b', "Public Health Engineering Dept, Odisha"),
+    (r'\bpheg\s*gujarat\b|\bphed\s*gujarat\b|\bgujarat\s*phed\b|\bgujarat\s*pheg\b|\bpublic\s*health\s*engineering\s*dept,?\s*gujarat\b', "Public Health Engineering Dept, Gujarat"),
+    (r'\bpheg\s*odisha\b|\bphed\s*odisha\b|\bodisha\s*phed\b|\bodisha\s*pheg\b|\bpublic\s*health\s*engineering\s*dept,?\s*odisha\b', "Public Health Engineering Dept, Odisha"),
     (r'\bphed\s*west\s*bengal\b|\bpublic\s*health\s*engineering\s*dept,\s*west\s*bengal\b', "Public Health Engineering Dept, West Bengal"),
     (r'\bmah\s*pwd\b|\bmaharashtra\s*pwd\b|\bpwd\s*maharashtra\b|\bpublic\s*works\s*department\s*account\b', "Public Works Department, Govt of Maharashtra"),
-    (r'\bpwd\s*gujarat\b|\bgujarat\s*pwd\b', "Public Works Department, Govt of Gujarat"),
+    (r'\bpwd\s*gujarat\b|\bgujarat\s*pwd\b|\bgujarat\s*pw\b', "Public Works Department, Govt of Gujarat"),
     (r'\bpwd\s*tamil\s*nadu\b|\btamil\s*nadu\s*pwd\b|\bpwd\s*tn\b', "Public Works Department, Govt of Tamil Nadu"),
     (r'\bpwd\s*west\s*bengal\b|\bwest\s*bengal\s*pwd\b|\bwb\s*pwd\b', "Public Works Department, Govt of West Bengal"),
     (r'\bpwd\s*rajasthan\b|\brajasthan\s*pwd\b', "Public Works Department, Govt of Rajasthan"),
     (r'\birrigation\s*(?:&|and)?\s*waterways\s*dept(?:,\s*govt)?\s*of\s*west\s*bengal\b|\bwest\s*bengal\s*irrigation\b|\birrigation\s*wb\b', "Irrigation & Waterways Dept, Govt of West Bengal"),
-    (r'\birrigation\s*(?:&|and)?\s*waterways\s*dept(?:,\s*govt)?\s*of\s*uttar\s*pradesh\b|\buttar\s*pradesh\s*irrigation\b|\birrigation\s*up\b', "Irrigation & Waterways Dept, Govt of Uttar Pradesh"),
-    (r'\birrigation\s*(?:&|and)?\s*waterways\s*dept(?:,\s*govt)?\s*of\s*rajasthan\b|\brajasthan\s*irrigation\b|\birrigation\s*raj\b', "Irrigation & Waterways Dept, Govt of Rajasthan"),
+    (r'\birrigation\s*(?:&|and)?\s*waterways\s*dept(?:,\s*govt)?\s*of\s*uttar\s*pradesh\b|\buttar\s*pradesh\s*irrigation\b|\birrigation\s*up\b|\bup\s*irrigation(?:\s*account)?\b', "Irrigation & Waterways Dept, Govt of Uttar Pradesh"),
+    (r'\birrigation\s*(?:&|and)?\s*waterways\s*dept(?:,\s*govt)?\s*of\s*rajasthan\b|\brajasthan\s*irrigation\b|\birrigation\s*raj\b|\birr\s*(?:&|and)\s*waterways\s*dept\s*rajasthan\b', "Irrigation & Waterways Dept, Govt of Rajasthan"),
     (r'\bneda\b', "National Expressway Development Authority"),
     (r'\bnspo\b', "National Special Projects Office"),
     (r'\bsubarnarekha\s*valley\s*corp\b|\bsubarnarekha\b', "Subarnarekha Valley Corporation"),
@@ -90,7 +90,7 @@ CLIENT_ALIASES = [
     (r'\bgujarat\s*municipal\s*corporation\b|\bgujarat\s*municipal\b', "Gujarat Municipal Corporation"),
     (r'\blakshya\s*engineering\s*(?:&|and)?\s*construction\b|\blakshya\b', "Lakshya Engineering & Construction"),
     (r'\bjal\s*nigam,\s*jharkhand\b|\bjal\s*nigam\s*jharkhand\b', "Jal Nigam, Jharkhand"),
-    (r'\bjal\s*nigam,\s*gujarat\b|\bjal\s*nigam\s*gujarat\b', "Jal Nigam, Gujarat"),
+    (r'\bjal\s*nigam,?\s*gujarat\b|\bjal\s*nigam(?:\s*account)?\s*in\s*gujarat\b', "Jal Nigam, Gujarat"),
     (r'\bjal\s*nigam,\s*uttar\s*pradesh\b|\bjal\s*nigam\s*uttar\s*pradesh\b|\bjal\s*nigam\s*up\b', "Jal Nigam, Uttar Pradesh"),
 ]
 
@@ -217,13 +217,40 @@ class IntentPlanner:
                 self.known_clients.append(c_clean)
         self.known_clients.sort(key=lambda x: len(x), reverse=True)
 
-    def extract_categories(self, text: str) -> List[str]:
+    def extract_categories(self, text: str, ignored_phrases: Optional[List[str]] = None) -> List[str]:
+        """Extract canonical categories without allowing aliases to overlap.
+
+        Longer phrases win, so ``roads maintenance`` cannot also become
+        ``roads`` and ``large bridges`` cannot also become ``bridges``.
+        The final categories retain their order in the question.
+        """
         t_lower = text.lower()
-        found = []
-        for alias, canonical in CATEGORY_MAP:
-            if re.search(rf'\b{re.escape(alias)}\b', t_lower):
-                if canonical not in found:
-                    found.append(canonical)
+
+        # Client names can themselves contain category words (for example
+        # "National Expressway Development Authority" and "Irrigation &
+        # Waterways Dept"). Mask those spans before looking for requested
+        # work categories.
+        masked_text = t_lower
+        for client_name in sorted(self.known_clients, key=len, reverse=True):
+            masked_text = re.sub(re.escape(client_name.lower()), lambda m: " " * len(m.group(0)), masked_text)
+        for phrase in ignored_phrases or []:
+            if phrase:
+                masked_text = re.sub(re.escape(phrase.lower()), lambda m: " " * len(m.group(0)), masked_text)
+        occupied: List[tuple[int, int]] = []
+        matches: List[tuple[int, int, str]] = []
+
+        for alias, canonical in sorted(CATEGORY_MAP, key=lambda item: len(item[0]), reverse=True):
+            for match in re.finditer(rf'\b{re.escape(alias)}\b', masked_text):
+                span = match.span()
+                if any(span[0] < end and start < span[1] for start, end in occupied):
+                    continue
+                occupied.append(span)
+                matches.append((span[0], span[1], canonical))
+
+        found: List[str] = []
+        for _, _, canonical in sorted(matches, key=lambda item: item[0]):
+            if canonical not in found:
+                found.append(canonical)
         return found
 
     def plan(self, question: str, answer_type: Optional[str] = None) -> ExecutionPlan:
@@ -279,7 +306,9 @@ class IntentPlanner:
         
         if not client:
             for cli in self.known_clients:
-                if cli.lower() in q_lower:
+                normalized_cli = re.sub(r'[^a-z0-9]+', ' ', cli.lower()).strip()
+                normalized_q = re.sub(r'[^a-z0-9]+', ' ', q_lower).strip()
+                if normalized_cli in normalized_q:
                     client = cli.strip(' ,.')
                     break
 
@@ -360,7 +389,7 @@ class IntentPlanner:
         else:
             m_years = re.findall(r'\b(20\d{2})\b', question)
             unique_years = list(dict.fromkeys(m_years))
-            cats_found = self.extract_categories(question)
+            cats_found = self.extract_categories(question, ignored_phrases=[proj] if proj else None)
 
             # Check 1: Gap to Threshold (Target in question e.g. "target of INR 20 Cr", "hit our target", "how much more contract value would we need to bring in to hit")
             if ("target" in q_lower and ("hit" in q_lower or "reach" in q_lower or "secure" in q_lower or "target of" in q_lower or "credential target" in q_lower)) or "reach our credential target" in q_lower or "how much more contract value" in q_lower or "how much more value do we need" in q_lower or "need to secure from them to clear" in q_lower or "still need to secure" in q_lower:
@@ -387,7 +416,10 @@ class IntentPlanner:
                 "deduct every cleared", "remains on the invoices", "balance across the invoices",
                 "balance when i cross-check invoices", "unpaid amount", "unpaid charges",
                 "remaining unpaid balance", "true remaining balance", "system balance",
-                "adjusted balance", "credits are applied", "cleared against those billed amounts"
+                "adjusted balance", "credits are applied", "cleared against those billed amounts",
+                "still owe", "still due", "currently due", "amount due", "total amount due",
+                "total amount still owed", "pending amount", "still pending", "billed amounts that are still pending",
+                "billed totals is still pending", "submitted charges that remain unpaid"
             ]) and "shortfall between our awarded" not in q_lower and "gap between total award value" not in q_lower and "sitting above" not in q_lower:
                 pattern = "ar_outstanding"
                 subtasks = [
@@ -415,7 +447,7 @@ class IntentPlanner:
                 ]
 
             # Check 6: Category Difference
-            elif len(cats_found) >= 2 and ("difference" in q_lower or "variance" in q_lower or "spread" in q_lower or "net value" in q_lower or "diff" in q_lower or "versus" in q_lower or " vs " in q_lower or "subtract" in q_lower or "between" in q_lower or "compared to" in q_lower or "larger than" in q_lower or "ahead on" in q_lower or "worth more than" in q_lower):
+            elif len(cats_found) >= 2:
                 pattern = "category_diff"
                 extra_params = {"categories": cats_found}
                 subtasks = [
@@ -428,23 +460,15 @@ class IntentPlanner:
                 pattern = "unbilled_gap"
                 subtasks = [
                     SubTask("T1", "sql_query", f"Calculate shortfall: Awarded Portfolio - Billed Invoiced for client {client}", {"sql_type": "unbilled_gap", "client": client}),
-                    SubTask("T2", "math_compute", "Compute |Awarded - Invoiced| INR", {"metric": "gap_inr"}, depends_on=["T1"])
+                    SubTask("T2", "math_compute", "Return the already computed awarded-versus-invoiced gap", {"metric": "passthrough"}, depends_on=["T1"])
                 ]
 
             # Check 8: Exclusion Aggregate
             elif "excluding" in q_lower or "exclude" in q_lower or "is excluded" in q_lower or "set aside" in q_lower or "minus the" in q_lower or "without the" in q_lower or "dropping the" in q_lower or "stripped out" in q_lower or "filter out the" in q_lower or "carve that out" in q_lower:
                 pattern = "exclusion_aggregate"
-                excluded = "Water Treatment"
-                if "water treatment" in q_lower: excluded = "Water Treatment"
-                elif "water supply" in q_lower: excluded = "Water Supply"
-                elif "industrial epc" in q_lower or "industrial" in q_lower: excluded = "Industrial Epc"
-                elif "large bridges" in q_lower: excluded = "Large Bridges"
-                elif "small buildings" in q_lower: excluded = "Small Buildings"
-                elif "buildings" in q_lower: excluded = "Buildings"
-                elif "bridges" in q_lower or "flyovers" in q_lower: excluded = "Bridges Flyovers"
-                elif "expressways" in q_lower: excluded = "Expressways"
-                elif "roads maintenance" in q_lower or "roads" in q_lower: excluded = "Roads Maintenance"
-                elif "tunnels" in q_lower: excluded = "Tunnels"
+                excluded = cats_found[0] if cats_found else None
+                if excluded is None:
+                    raise ValueError(f"Could not resolve excluded category from question: {question}")
                 
                 subtasks = [
                     SubTask("T1", "sql_query", f"Retrieve all projects for client {client} excluding {excluded}", {"sql_type": "client_excluded_projects", "client": client, "exclude": excluded}),
@@ -481,9 +505,10 @@ class IntentPlanner:
             # Check 12: Role Split
             elif "as prime" in q_lower or "as subcontractor" in q_lower or "as jv" in q_lower:
                 pattern = "role_split"
+                role = "Subcontractor" if "as subcontractor" in q_lower else ("JV Partner" if "as jv" in q_lower else "Prime")
                 subtasks = [
-                    SubTask("T1", "sql_query", f"Retrieve projects for client {client} where role = 'Prime'", {"sql_type": "client_role_projects", "client": client, "role": "Prime"}),
-                    SubTask("T2", "math_compute", "Sum contract values of Prime projects in exact INR", {"metric": "sum_inr"}, depends_on=["T1"])
+                    SubTask("T1", "sql_query", f"Retrieve projects for client {client} where role = '{role}'", {"sql_type": "client_role_projects", "client": client, "role": role}),
+                    SubTask("T2", "math_compute", f"Sum contract values of {role} projects in exact INR", {"metric": "sum_inr"}, depends_on=["T1"])
                 ]
 
             # Check 13: Hop Aggregate / Combined Value
