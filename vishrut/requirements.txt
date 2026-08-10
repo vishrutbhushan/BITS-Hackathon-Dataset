@@ -1,0 +1,16 @@
+# Stage 0 (raw extraction) -- run on your laptop against the real corpus
+pdfplumber
+openpyxl
+
+# Stage 4 primary path (local LLM) + fallback path (OpenRouter)
+requests
+
+# Optional: faster fuzzy matching at scale (stdlib difflib is used by
+# default and needs nothing installed)
+# rapidfuzz
+
+# Optional: swap sqlite3 (stdlib, used throughout) for DuckDB if you
+# want faster analytical queries over a larger corpus -- the SQL in
+# shapes/dispatcher.py and db/schema.py is plain ANSI SQL and ports
+# with minor changes.
+# duckdb
