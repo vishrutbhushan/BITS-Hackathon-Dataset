@@ -90,24 +90,26 @@ def run(db_path: str, questions_path: str, out_path: str, log_path: str = None, 
     gazetteer = Gazetteer(con)
     log = [] if log_path else None
 
-    with open(questions_path, encoding="utf-8") as f, open(out_path, "w", encoding="utf-8") as out:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            item = json.loads(line)
+    # Load all questions to get total count
+    with open(questions_path, encoding="utf-8") as f:
+        questions = [json.loads(line.strip()) for line in f if line.strip()]
+        
+    total_questions = len(questions)
+    print(f"Loaded {total_questions} questions from {questions_path}")
+
+    with open(out_path, "w", encoding="utf-8") as out:
+        for index, item in enumerate(questions, 1):
             qid, question = item["qid"], item["question"]
+            print(f"[{index}/{total_questions}] {qid}: Processing... ", end="", flush=True)
             try:
                 answer, meta = answer_question(con, gazetteer, question, log=log)
+                print(f"Success! Shape: {meta['shape']} -> Answer: {answer}")
             except Exception as e:
-                # Per the README: an unanswered question scores zero, and a
-                # wrong one costs nothing extra -- so on failure, still emit
-                # SOMETHING rather than skip the line. 0 is a safe default
-                # for counts; adjust if you'd rather guess a typical value.
-                print(f"[warn] {qid} failed: {e}", file=sys.stderr)
+                print(f"Failed! Error: {e}")
                 answer = 0
             out.write(json.dumps({"qid": qid, "answer": answer}) + "\n")
-            if delay > 0:
+            out.flush()
+            if delay > 0 and index < total_questions:
                 time.sleep(delay)
 
     if log_path:
