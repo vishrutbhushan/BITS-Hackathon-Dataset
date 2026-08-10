@@ -64,10 +64,9 @@ Return JSON with exactly these keys:
 import time
 
 def parse_question(question: str, gazetteer, timeout: int = 30) -> dict:
-    """Call the OpenRouter model and return its raw parsed JSON."""
+    """Call the LLM model (OpenRouter or local Ollama) and return its raw parsed JSON."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY not set")
+    model_name = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 
     prompt = PROMPT_TEMPLATE.format(
         shapes=", ".join(SHAPE_NAMES),
@@ -76,36 +75,56 @@ def parse_question(question: str, gazetteer, timeout: int = 30) -> dict:
         project_candidates=gazetteer.candidates_for_prompt(question, "project"),
         question=question,
     )
-    
-    max_retries = 5
-    backoff = 2
-    for attempt in range(max_retries):
-        try:
-            resp = requests.post(
-                OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
+
+    if model_name.lower() == "local" or not api_key:
+        # Call local Ollama server running over the SSH tunnel
+        local_model = os.environ.get("LOCAL_MODEL", "qwen2.5:14b")
+        resp = requests.post(
+            "http://localhost:11434/api/chat",
+            json={
+                "model": local_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "options": {
+                    "temperature": 0
                 },
-                timeout=timeout,
-            )
-            if resp.status_code == 429:
-                print(f"[warn] OpenRouter rate limit (429) encountered. Retrying in {backoff}s (attempt {attempt+1}/{max_retries})...", file=sys.stderr)
+                "stream": False,
+                "format": "json"
+            },
+            timeout=timeout
+        )
+        resp.raise_for_status()
+        raw_text = resp.json()["message"]["content"].strip()
+    else:
+        max_retries = 5
+        backoff = 2
+        for attempt in range(max_retries):
+            try:
+                resp = requests.post(
+                    OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0,
+                    },
+                    timeout=timeout,
+                )
+                if resp.status_code == 429:
+                    print(f"[warn] OpenRouter rate limit (429) encountered. Retrying in {backoff}s (attempt {attempt+1}/{max_retries})...", file=sys.stderr)
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                resp.raise_for_status()
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise e
+                print(f"[warn] Request failed: {e}. Retrying in {backoff}s...", file=sys.stderr)
                 time.sleep(backoff)
                 backoff *= 2
-                continue
-            resp.raise_for_status()
-            break
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise e
-            print(f"[warn] Request failed: {e}. Retrying in {backoff}s...", file=sys.stderr)
-            time.sleep(backoff)
-            backoff *= 2
-            
-    raw_text = resp.json()["choices"][0]["message"]["content"].strip()
+                
+        raw_text = resp.json()["choices"][0]["message"]["content"].strip()
+
     # Models sometimes wrap JSON in fences despite instructions -- strip defensively.
     raw_text = raw_text.strip("`").removeprefix("json").strip()
     return json.loads(raw_text)
