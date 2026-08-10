@@ -53,6 +53,12 @@ def main():
         default="../sample_questions.json", 
         help="Path to questions JSON file (default: ../sample_questions.json)"
     )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=2.0,
+        help="Delay in seconds between OpenRouter requests to avoid rate limits (default: 2.0)"
+    )
     args = parser.parse_args()
 
     print("=== Step 1: Install Requirements ===")
@@ -96,7 +102,8 @@ def main():
         "pipeline.py",
         "--db", "graph.sqlite",
         "--questions", "questions.jsonl",
-        "--out", "submission.jsonl"
+        "--out", "submission.jsonl",
+        "--delay", str(args.delay)
     ], check=False)
     
     print("\n=== Step 5: Convert Output to CSV ===")
@@ -110,8 +117,13 @@ def main():
         print(f"Error: evaluate.py not found at {eval_script}")
         sys.exit(1)
         
+    # First run self-test
+    print("Running evaluate.py self-test...")
+    run_cmd([sys.executable, str(eval_script), "--self-test"], check=False)
+    
     if os.path.exists("submission.csv"):
         # Run evaluate.py
+        print(f"Evaluating submission against {src_questions}...")
         run_cmd([
             sys.executable,
             str(eval_script),

@@ -17,6 +17,7 @@ Each line of `questions.jsonl` should look like:
 import argparse
 import json
 import sys
+import time
 
 from db.schema import get_connection
 from understanding.entity_match import Gazetteer
@@ -84,7 +85,7 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     return final_answer, meta
 
 
-def run(db_path: str, questions_path: str, out_path: str, log_path: str = None):
+def run(db_path: str, questions_path: str, out_path: str, log_path: str = None, delay: float = 2.0):
     con = get_connection(db_path)
     gazetteer = Gazetteer(con)
     log = [] if log_path else None
@@ -106,6 +107,8 @@ def run(db_path: str, questions_path: str, out_path: str, log_path: str = None):
                 print(f"[warn] {qid} failed: {e}", file=sys.stderr)
                 answer = 0
             out.write(json.dumps({"qid": qid, "answer": answer}) + "\n")
+            if delay > 0:
+                time.sleep(delay)
 
     if log_path:
         with open(log_path, "w", encoding="utf-8") as f:
@@ -118,6 +121,7 @@ if __name__ == "__main__":
     ap.add_argument("--questions", required=True, help="questions.jsonl, one {qid, question} per line")
     ap.add_argument("--out", default="submission.jsonl")
     ap.add_argument("--log", default="run_log.json", help="per-question trace for debugging")
+    ap.add_argument("--delay", type=float, default=2.0, help="delay in seconds between queries to avoid rate limiting")
     args = ap.parse_args()
-    run(args.db, args.questions, args.out, args.log)
+    run(args.db, args.questions, args.out, args.log, args.delay)
     print(f"Wrote {args.out}")
