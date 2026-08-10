@@ -1,7 +1,7 @@
 {
   "domain": "infrastructure_construction",
   "company": "National Infrastructure Corp. Ltd.",
-  "n_questions": 23,
+  "n_questions": 21,
   "gates": [
     "determinism",
     "numeric_only",
@@ -311,38 +311,6 @@
         "6. Answer: 66.67"
       ],
       "shape": "referenced_share",
-      "hops": 5
-    },
-    {
-      "qid": "HS-IC-0022",
-      "question": "Public Health Engineering Dept, Gujarat; as Prime\u2014what\u2019s the final contract value we need to lock in before the 3pm cutoff?",
-      "answer": 157300000,
-      "answer_type": "money",
-      "reasoning_steps": [
-        "1. Public Health Engineering Dept, Gujarat",
-        "2. works",
-        "3. as Prime",
-        "4. total",
-        "5. Values read from the documents: 134,000,000, 23,300,000",
-        "6. Answer: 157,300,000"
-      ],
-      "shape": "role_split",
-      "hops": 5
-    },
-    {
-      "qid": "HS-IC-0023",
-      "question": "Jharkhand Municipal Corporation; as Prime\u2014what\u2019s the defensible aggregate value we should report for the completed scope?",
-      "answer": 384100000,
-      "answer_type": "money",
-      "reasoning_steps": [
-        "1. Jharkhand Municipal Corporation",
-        "2. works",
-        "3. as Prime",
-        "4. total",
-        "5. Values read from the documents: 87,400,000, 314,600,000, 69,500,000",
-        "6. Answer: 384,100,000"
-      ],
-      "shape": "role_split",
       "hops": 5
     },
     {
