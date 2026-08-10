@@ -63,8 +63,15 @@ def read_submission(path):
 
 
 def evaluate(questions, submitted):
+    """Score a submission. Questions marked `scored: false` are skipped entirely.
+
+    Those are questions whose filtering property is not recoverable from the shipped documents, so
+    no correct reading reaches the answer. Participants may answer them; they simply do not count.
+    """
     rows, by_shape = [], collections.defaultdict(lambda: [0.0, 0])
     for q in questions:
+        if q.get("scored") is False:
+            continue
         gold = q.get("answer", q.get("answer_gold"))
         s = score_one(gold, submitted.get(q["qid"]))
         rows.append({"qid": q["qid"], "shape": q.get("shape"), "gold": gold,

@@ -1,10 +1,10 @@
 {
-  "set_id": "hidden_set_v1.1",
+  "set_id": "hidden_set_v1.2",
   "domain": "infrastructure_construction",
   "company": "National Infrastructure Corp. Ltd.",
   "frozen": "2026-08-10",
-  "n_questions": 344,
-  "note": "Questions only. Every answer is a plain number: rupees (no units, no commas), a count, a percentage out of 100, or a number of days.",
+  "n_questions": 320,
+  "note": "Questions only. Answers are plain numbers.",
   "questions": [
     {
       "qid": "HV-IC-0001",
@@ -22,19 +22,9 @@
       "answer_type": "percent"
     },
     {
-      "qid": "HV-IC-0005",
-      "question": "Please advise how many distinct internal business units have completed projects for the client linked to Meera Chatterjee\u2019s portfolio?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0006",
       "question": "Lakshya Engineering & Construction is under audit, so what is the exact gap between the total value of work awarded and the amount we have actually invoiced?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0008",
-      "question": "If I anchor this to Tanvir Menon\u2019s client roster, how many separate internal business units actually delivered the projects?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0009",
@@ -362,11 +352,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0087",
-      "question": "lakshmi, how many distinct internal business units actually delivered for her main client?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0088",
       "question": "Kavita Reddy\u2019s PMP for the Process Piping Package \u2014 Delhi Pkg-75 is in my hand, but I\u2019m still figuring out the bid desk workflow, so how do I actually calculate the rupee difference between the average and median for every completed job under that client, and should I leave it negative if the average turns out smaller?",
       "answer_type": "money"
@@ -447,18 +432,8 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0106",
-      "question": "Cross-checking against Pooja Sen\u2019s client account, how many business units delivered the assignments?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0107",
       "question": "Kavita Reddy and Rahul Menon covered the Irrigation & Waterways Dept, Govt of West Bengal account under PMP credentials, but what is the count of completed engagements we hold for that client against our tally?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0108",
-      "question": "I\u2019m pretty sure Amit Iyer\u2019s client account only involved a couple of our internal teams, but am I misremembering exactly how many distinct internal business units actually delivered?",
       "answer_type": "count"
     },
     {
@@ -475,11 +450,6 @@
       "qid": "HV-IC-0112",
       "question": "I need to lock down the exact difference in completed work value for the Public Health Engineering Dept, Odisha between 2023 and 2024\u2014what\u2019s the precise figure?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0113",
-      "question": "chandan, for that power client, how many business units handled the delivery?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0114",
@@ -607,11 +577,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0141",
-      "question": "Pooja Bose, could you please confirm the precise count of separate internal divisions that handled the assignments for her principal client?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0142",
       "question": "Sanjay Joshi, I\u2019m racing the submission deadline and need the exact percentage of everything he has delivered that went to his single largest client, stated as a whole number out of 100, before we lock the bid.",
       "answer_type": "percent"
@@ -720,21 +685,6 @@
       "qid": "HV-IC-0167",
       "question": "Suresh Das\u2019s Six Sigma Black Belt for the Road Widening \u2014 Odisha Pkg-98 points to a specific client, so what\u2019s the rupee difference between the average and median contract values for all their completed jobs right now, and should I leave it negative if the average dips below the median before we lock this submission?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0168",
-      "question": "I\u2019m still learning how we track these, but when you pull up Meera Roy\u2019s file, how many different internal business units actually delivered for her principal client?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0169",
-      "question": "Meera Roy\u2019s principal account \u2014 how many distinct internal business units supported it, and can you confirm the count before the bid drops?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0171",
-      "question": "Neha Chopra\u2019s principal account \u2014 please confirm the exact count of internal business units that actually delivered on their engagements.",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0172",
@@ -877,11 +827,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0203",
-      "question": "Kavita Reddy\u2019s principal account \u2014 I\u2019m fairly certain the tally circulating right now is inflated, so could you actually verify how many separate internal units delivered for them?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0204",
       "question": "Suresh Chopra, what is the exact whole-number percentage out of a hundred that his single largest client accounts for across all his delivered work?",
       "answer_type": "percent"
@@ -905,11 +850,6 @@
       "qid": "HV-IC-0209",
       "question": "Amit Iyer\u2019s Six Sigma Black Belt certification for the Rigid Pavement \u2014 Madhya Pradesh Pkg-7 job is on my desk, but the number currently circulating feels like a localized read rather than the full picture, so what\u2019s the actual mean size across every project we\u2019ve wrapped up for the organization that brought us in for that pavement contract?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0210",
-      "question": "Farhan Roy\u2019s assignments \u2014 cross-checking against the delivery log, how many internal business units fulfilled those engagements?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0211",
@@ -1037,11 +977,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0237",
-      "question": "Rahul Menon\u2019s main client \u2014 I\u2019m fairly certain it was just a small group of internal teams that handled their projects, but could you double-check whether my recollection is right on how many separate internal business units actually delivered for them?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0238",
       "question": "Imran Joshi, I saw the rough split circulating but that\u2019s clearly not the calculated figure we need, so what percentage out of a hundred of his overall delivery volume actually went to his top client?",
       "answer_type": "percent"
@@ -1065,21 +1000,6 @@
       "qid": "HV-IC-0244",
       "question": "pritis pmp hit mar 10 2021 for the west bengal hospital block, how many days to wrap up?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0245",
-      "question": "Meera Roy\u2019s primary client \u2014 could you please confirm the exact number of internal business units that have executed delivery obligations for them?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0246",
-      "question": "Tanvir Menon\u2019s current portfolio is locked for submission in ninety minutes, so could you confirm the exact count of distinct internal business units that have delivered for that client right now?",
-      "answer_type": "count"
-    },
-    {
-      "qid": "HV-IC-0247",
-      "question": "Neha Chopra\u2019s main account shows a different number on the surface, but could you verify the actual count of internal business units that have delivered for them?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0248",
@@ -1162,11 +1082,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0265",
-      "question": "Meera Roy\u2019s account is under review, so could you confirm the defensible count of separate internal business units that have actually fulfilled delivery commitments for their engagements?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0266",
       "question": "tamil nadu municipal corporation totals look off, can you work out missing amount between commitments and our bills?",
       "answer_type": "money"
@@ -1212,11 +1127,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0277",
-      "question": "I\u2019m fairly certain Rajesh Rao\u2019s account only involves his direct team, but I might be misremembering\u2014could you quickly confirm how many distinct internal business units have actually delivered for that client?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0278",
       "question": "I'm reviewing Tanvir Menon's PMP for the Rail Tunnel \u2014 Jharkhand Pkg-102, but I need the mean scale across every finished assignment we've delivered to the commissioning authority for that one.",
       "answer_type": "money"
@@ -1260,11 +1170,6 @@
       "qid": "HV-IC-0287",
       "question": "The draft figure circulating looks off\u2014can you walk me through the actual derived gap between Mega Infrastructure Authority's 2010 baseline and 2018 completed work totals?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0288",
-      "question": "Rahul Menon\u2019s current project shows a straightforward number on the portal, but I\u2019m pretty sure that\u2019s just the surface level\u2014could you actually verify how many separate internal business units have genuinely delivered for that client?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0289",
@@ -1427,11 +1332,6 @@
       "answer_type": "days"
     },
     {
-      "qid": "HV-IC-0325",
-      "question": "Neha Chopra\u2019s file is on my desk, but I\u2019m still getting my bearings with how our delivery structure maps to client accounts\u2014could you just tell me how many separate internal units actually handled her assignments?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0326",
       "question": "Maharashtra Municipal Corporation requires the precise difference between our highest-value completed assignment and the subsequent one for the ongoing submission, could you please calculate that figure?",
       "answer_type": "money"
@@ -1520,11 +1420,6 @@
       "qid": "HV-IC-0344",
       "question": "irrigation & waterways dept, govt of west bengal, what\u2019s the difference between our biggest and next completed jobs?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0345",
-      "question": "lakshmi ghosh\u2019s account\u2014how many separate units actually delivered it?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0346",
@@ -1617,11 +1512,6 @@
       "answer_type": "money"
     },
     {
-      "qid": "HV-IC-0365",
-      "question": "Neha Chopra\u2019s account is coming up for an auditor review, and I need the defensible count of internal units involved\u2014could you confirm how many separate business units have actually delivered on that client\u2019s projects?",
-      "answer_type": "count"
-    },
-    {
       "qid": "HV-IC-0368",
       "question": "I\u2019m still getting my bearings on how we track these, but could you tell me how many days elapsed from Naveen\u2019s March 10, 2021 PMP for the Uttar Pradesh Pkg-31 STP site until the work actually wrapped up?",
       "answer_type": "days"
@@ -1650,11 +1540,6 @@
       "qid": "HV-IC-0374",
       "question": "PMP; Imran Joshi\u2019s Patch Repair \u2014 Delhi Pkg-132 is on my desk, and while the dashboard flashes a quick rupee figure, I\u2019m fairly certain that\u2019s just a surface-level total rather than the actual spread\u2014could you properly derive the average and median contract values for the commissioning client behind that package, then give me the exact rupee gap between them, negative if the average ends up lower?",
       "answer_type": "money"
-    },
-    {
-      "qid": "HV-IC-0375",
-      "question": "Imran Joshi\u2019s assignments are cross-checked against the client roster, but what is the count of internal business units that delivered for the account?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0376",
@@ -1715,11 +1600,6 @@
       "qid": "HV-IC-0387",
       "question": "Could you please confirm the exact day count from the March 10, 2021 PMP issuance for Neha Chopra on the Bituminous Overlay \u2014 Odisha Pkg-35 project to its final completion?",
       "answer_type": "days"
-    },
-    {
-      "qid": "HV-IC-0388",
-      "question": "Lakshmi Ghosh\u2019s client account requires a precise count of the distinct internal business units that have managed projects on their behalf\u2014could you confirm that figure?",
-      "answer_type": "count"
     },
     {
       "qid": "HV-IC-0389",
