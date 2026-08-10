@@ -14,6 +14,7 @@ retry or loop itself, see understanding/fallback.py for escalation.
 """
 import json
 import os
+import sys
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
@@ -53,10 +54,14 @@ Return JSON with exactly these keys:
   "threshold_rupees": <number or null, if the question states a target/threshold amount>,
   "grading": "<Excellent|Very Good|Good|Satisfactory|Below Average|Poor, or null>",
   "role": "<Prime|Subcontractor|Joint Venture, or null>",
-  "category_to_exclude": "<category string, or null>"
+  "category_to_exclude": "<category string, or null>",
+  "issue_date": "<date in YYYY-MM-DD format, or null>",
+  "cert_type": "<PMP|Six Sigma Black Belt|PRINCE2|ISO Lead Auditor, or null>"
 }}
 """
 
+
+import time
 
 def parse_question(question: str, gazetteer, timeout: int = 30) -> dict:
     """Call the OpenRouter model and return its raw parsed JSON."""
@@ -71,17 +76,35 @@ def parse_question(question: str, gazetteer, timeout: int = 30) -> dict:
         project_candidates=gazetteer.candidates_for_prompt(question, "project"),
         question=question,
     )
-    resp = requests.post(
-        OPENROUTER_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
-        },
-        timeout=timeout,
-    )
-    resp.raise_for_status()
+    
+    max_retries = 5
+    backoff = 2
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                },
+                timeout=timeout,
+            )
+            if resp.status_code == 429:
+                print(f"[warn] OpenRouter rate limit (429) encountered. Retrying in {backoff}s (attempt {attempt+1}/{max_retries})...", file=sys.stderr)
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            resp.raise_for_status()
+            break
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            print(f"[warn] Request failed: {e}. Retrying in {backoff}s...", file=sys.stderr)
+            time.sleep(backoff)
+            backoff *= 2
+            
     raw_text = resp.json()["choices"][0]["message"]["content"].strip()
     # Models sometimes wrap JSON in fences despite instructions -- strip defensively.
     raw_text = raw_text.strip("`").removeprefix("json").strip()

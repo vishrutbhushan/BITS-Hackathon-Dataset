@@ -46,8 +46,43 @@ class Gazetteer:
         matches = best_matches(mention, self.projects, top_n=1)
         return matches[0][0] if matches else None
 
-    def candidates_for_prompt(self, mention: str, entity_type: str, top_n: int = 5):
+    def candidates_for_prompt(self, mention: str, entity_type: str, top_n: int = 15):
         """What to hand the LLM as the *only* valid choices for a given
         mention -- keeps it selecting rather than generating names."""
         pool = {"client": self.clients, "engineer": self.engineers, "project": self.projects}[entity_type]
-        return [c for c, _ in best_matches(mention, pool, top_n=top_n, min_score=0.3)]
+        import re
+        
+        matches = []
+        q_low = mention.lower()
+        q_clean = re.sub(r'[^\w\s]', '', q_low)
+        
+        # 1. Exact or substring match (case-insensitive)
+        for c in pool:
+            c_low = c.lower()
+            c_clean = re.sub(r'[^\w\s]', '', c_low)
+            if c_low in q_low or c_clean in q_clean:
+                matches.append((c, 1.0))
+                
+        # 2. Token overlap fallback
+        if len(matches) < top_n:
+            q_tokens = set(re.findall(r'\w+', q_low))
+            for c in pool:
+                if any(c == m[0] for m in matches):
+                    continue
+                c_tokens = set(re.findall(r'\w+', c.lower()))
+                overlap = len(c_tokens.intersection(q_tokens))
+                if overlap > 0:
+                    score = overlap / len(c_tokens)
+                    if score >= 0.2:
+                        matches.append((c, score))
+                        
+        # 3. Fuzzy ratio fallback
+        if len(matches) < top_n:
+            scored = [(c, SequenceMatcher(None, mention.lower(), c.lower()).ratio()) for c in pool if not any(c == m[0] for m in matches)]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            for c, s in scored:
+                if s >= 0.1:
+                    matches.append((c, s))
+                    
+        matches.sort(key=lambda x: x[1], reverse=True)
+        return [c for c, _ in matches[:top_n]]

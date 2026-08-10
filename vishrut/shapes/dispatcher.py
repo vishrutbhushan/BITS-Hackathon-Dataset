@@ -104,7 +104,13 @@ def shape_temporal_chain(con, engineer_name, issue_date):
     """Sum of an engineer's works completed after a given date."""
     rows = _works_led(con, engineer_name)
     issue = parse_date(issue_date)
-    after = [r for r in rows if r["completion_date"] and parse_date(r["completion_date"]) > issue]
+    if not issue:
+        raise ValueError(f"invalid issue_date: {issue_date}")
+    after = []
+    for r in rows:
+        comp_date = parse_date(r["completion_date"]) if r["completion_date"] else None
+        if comp_date and comp_date > issue:
+            after.append(r)
     total = sum(r["value_rupees"] for r in after)
     return total, {"values": [r["value_rupees"] for r in after]}
 
