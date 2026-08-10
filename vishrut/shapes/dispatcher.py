@@ -167,13 +167,14 @@ def shape_gap_to_threshold(con, client_name, threshold_rupees):
 
 
 def shape_rank_value(con, client_name):
-    """Difference between the largest and second-largest work for a client."""
+    """Difference in value between the largest and second-largest completed work for a client."""
     rows = _portfolio(con, client_name)
     values = sorted((r["value_rupees"] for r in rows), reverse=True)
     if len(values) < 2:
         raise ValueError("need at least 2 works to rank")
     diff = values[0] - values[1]
     return diff, {"sorted_values": values}
+
 
 
 def shape_role_split(con, client_name, role):
@@ -192,9 +193,19 @@ def shape_threshold_aggregate(con, client_name, threshold_rupees):
     matched = [r for r in rows if r["value_rupees"] > threshold_rupees]
     total = sum(r["value_rupees"] for r in matched)
     return total, {"values": [r["value_rupees"] for r in matched]}
+def shape_category_diff(con, client_name, category_a, category_b):
+    """Absolute value difference between two category totals for a client.
+
+    Returns abs(sum(cat_a) - sum(cat_b)) so the answer is always positive
+    regardless of which category the question happens to mention first.
+    """
+    rows = _portfolio(con, client_name)
+    total_a = sum(r["value_rupees"] for r in rows if r["category"] == category_a)
+    total_b = sum(r["value_rupees"] for r in rows if r["category"] == category_b)
+    diff = abs(total_a - total_b)
+    return diff, {"category_a": category_a, "total_a": total_a, "category_b": category_b, "total_b": total_b}
 
 
-# --- registry -------------------------------------------------------------
 # Question-understanding (Stage 4) resolves a question to one of these
 # names plus a kwargs dict; the pipeline just does REGISTRY[shape](con, **kwargs).
 REGISTRY = {
@@ -211,4 +222,6 @@ REGISTRY = {
     "rank_value": shape_rank_value,
     "role_split": shape_role_split,
     "threshold_aggregate": shape_threshold_aggregate,
+    "category_diff": shape_category_diff,
 }
+

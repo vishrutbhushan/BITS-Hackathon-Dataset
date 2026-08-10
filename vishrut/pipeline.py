@@ -30,10 +30,12 @@ from format_answer import format_answer
 
 
 def classify_shape(q_text):
+    """Keyword-based shape fallback. Only called when the LLM returns unknown."""
     q = q_text.lower()
     if "lack" in q or "no client reference" in q or "no reference letter" in q:
         return "absence"
-    if "percent" in q or "percentage" in q or "share" in q or "collection figure" in q or "out of one hundred" in q:
+    # Require explicit percentage language; 'share' alone is too broad
+    if "percent" in q or "percentage" in q or "collection figure" in q or "out of one hundred" in q or "out of 100" in q:
         return "referenced_share"
     if "days" in q or "interval" in q or "exact interval" in q:
         return "date_span"
@@ -41,6 +43,9 @@ def classify_shape(q_text):
         return "distinct_count"
     if "after" in q and ("completed" in q or "wrapped up" in q or "finished" in q or "issued" in q or "issuance" in q or "credential" in q):
         return "temporal_chain"
+    # category_diff must be checked before exclusion_aggregate
+    if "value difference between" in q or "difference between" in q and "scope" in q:
+        return "category_diff"
     if "excluding" in q or "exclude" in q:
         return "exclusion_aggregate"
     if "additional work" in q or "credential target" in q:
@@ -58,6 +63,7 @@ def classify_shape(q_text):
     if "combined value" in q or "total value" in q or "aggregate value" in q:
         return "hop_aggregate"
     return "unknown"
+
 
 
 def _resolve_client_from_project(con, project_name):
@@ -105,10 +111,13 @@ def answer_question(con, gazetteer, question_text: str, log=None):
     parsed = local_llm.parse_question(question_text, gazetteer)
     used = "local"
 
-    # 1. Deterministic Rule-Based Shape Classification Overwrite
-    pred_shape = classify_shape(question_text)
-    if pred_shape != "unknown":
-        parsed["shape"] = pred_shape
+    # 1. Rule-based shape classification: only kicks in when the LLM returns
+    #    unknown or null, so the LLM is always the primary signal.
+    if parsed.get("shape") in (None, "unknown"):
+        pred_shape = classify_shape(question_text)
+        if pred_shape != "unknown":
+            parsed["shape"] = pred_shape
+            used = "keyword_fallback"
 
     # 2. Multi-hop Entity Resolution from Project Name (Unconditionally overwrite if project_name is present)
     if parsed.get("project_name"):
@@ -119,21 +128,15 @@ def answer_question(con, gazetteer, question_text: str, log=None):
         if resolved_eng:
             parsed["engineer_name"] = resolved_eng
 
-    # 3. Rule-Based Threshold Money Extraction Overwrite (Unconditionally overwrite using parse_money if found)
+    # 3. Rule-Based Threshold Money Extraction: parse_money is more reliable than
+    #    the LLM on raw INR/Cr/Lakh strings. Only overwrite if a clear monetary
+    #    expression is found in the question text.
     from parsers.money import parse_money
     extracted_money = parse_money(question_text)
     if extracted_money is not None:
         parsed["threshold_rupees"] = extracted_money
 
-    # 4. Rule-Based Category Exclusion Fallback
-    if parsed.get("category_to_exclude") is None:
-        q_low = question_text.lower()
-        for cat in ["bridges and flyovers", "water treatment", "industrial epc", "roads maintenance", "buildings", "tunnels", "water supply"]:
-            if cat in q_low or cat.replace(" and ", " ") in q_low or cat.rstrip("s") in q_low:
-                parsed["category_to_exclude"] = cat
-                break
-
-    # 5. Entity Validation (Warn rather than crash, fall back to RAG if invalid)
+    # 4. Entity Validation (Warn rather than crash, fall back to RAG if invalid)
     if not local_llm.validate(parsed, gazetteer):
         logger.warning(f"Validation failed for {parsed}, falling back to RAG...")
         return run_rag_fallback(question_text, log)
@@ -163,6 +166,13 @@ def answer_question(con, gazetteer, question_text: str, log=None):
             "cert_type": parsed.get("cert_type", "PMP"),
             "issue_date": parsed.get("issue_date"),
             "project_name": parsed["project_name"],
+        },
+        # category_diff: absolute value difference between two category totals for a client.
+        # The LLM should populate category_a and category_b from the question.
+        "category_diff": {
+            "client_name": parsed["client_name"],
+            "category_a": parsed.get("category_a"),
+            "category_b": parsed.get("category_to_exclude"),  # reuse slot for cat_b if LLM fills it
         },
     }
     kwargs = kwargs_by_shape.get(shape)

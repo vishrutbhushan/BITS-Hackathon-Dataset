@@ -13,8 +13,6 @@ by the caller (pipeline.py) against the gazetteer -- this module doesn't
 retry or loop itself, see understanding/fallback.py for escalation.
 """
 import json
-import os
-import sys
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
@@ -22,16 +20,12 @@ from dotenv import load_dotenv
 # Load environment variables from the vishrut directory's .env file
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
-
 
 SHAPE_NAMES = [
     "absence", "referenced_share", "date_span", "distinct_count",
     "hop_aggregate", "temporal_chain", "avg_work_size",
     "doc_filtered_aggregate", "exclusion_aggregate", "gap_to_threshold",
-    "rank_value", "role_split", "threshold_aggregate",
-    # extend as you identify the remaining ~8 shapes from the hidden set
+    "rank_value", "role_split", "threshold_aggregate", "category_diff",
 ]
 
 PROMPT_TEMPLATE = """You are extracting structured intent from a bid-desk question. \
@@ -54,10 +48,13 @@ Return JSON with exactly these keys:
   "threshold_rupees": <number or null, if the question states a target/threshold amount>,
   "grading": "<Excellent|Very Good|Good|Satisfactory|Below Average|Poor, or null>",
   "role": "<Prime|Subcontractor|Joint Venture, or null>",
-  "category_to_exclude": "<category string, or null>",
+  "category_to_exclude": "<category string to exclude or second category for category_diff, or null>",
+  "category_a": "<first category for category_diff shape, or null>",
   "issue_date": "<date in YYYY-MM-DD format, or null>",
   "cert_type": "<PMP|Six Sigma Black Belt|PRINCE2|ISO Lead Auditor, or null>"
 }}
+
+For 'category_diff' shape: set category_a and category_to_exclude to the two categories being compared.
 """
 
 
