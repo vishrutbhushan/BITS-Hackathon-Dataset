@@ -2,9 +2,15 @@
 """
 pipeline.py — End-to-End Bid Intelligence Pipeline in adityaDdon/
 Coordinates Intent Planner Node (DAG) -> Subtask Retriever Node (DuckDB FTS & SQL) -> Reasoner Node (LLM/Math).
+Produces official submission CSV format:
+    question_id,answer
+    HV-IC-0001,2942400000
+    HV-IC-0002,1516600000
+    HV-IC-0003,90.19
 """
 
 import sys
+import csv
 import json
 import argparse
 from pathlib import Path
@@ -25,7 +31,7 @@ class BidIntelligencePipeline:
         self.retriever = SubtaskRetriever()
         self.reasoner = ReasonerNode(use_llm=use_llm)
 
-    def answer_question(self, question: str) -> Dict[str, Any]:
+    def answer_question(self, question: str, answer_type: str = "money") -> Dict[str, Any]:
         # Step 1: Intent Planning & DAG Decomposition
         plan = self.planner.plan(question)
 
@@ -34,6 +40,18 @@ class BidIntelligencePipeline:
 
         # Step 3: LLM & Deterministic Reasoning / Computation
         final_answer = self.reasoner.reason(context)
+
+        # Format answer cleanly
+        if answer_type == "percent" or plan.pattern in ["referenced_share", "collection_rate"]:
+            if isinstance(final_answer, (int, float)):
+                if 0.0 < float(final_answer) <= 1.0:
+                    final_answer = round(float(final_answer) * 100, 2)
+                else:
+                    final_answer = round(float(final_answer), 2)
+        elif isinstance(final_answer, float) and final_answer.is_integer():
+            final_answer = int(final_answer)
+        elif isinstance(final_answer, (int, float)) and answer_type in ["money", "days", "count"]:
+            final_answer = int(round(final_answer))
 
         return {
             "question": question,
@@ -55,14 +73,15 @@ class BidIntelligencePipeline:
         detailed_results = []
 
         for i, q in enumerate(questions, 1):
-            qid = q.get("qid", f"Q-{i:04d}")
+            qid = q.get("qid") or q.get("question_id") or f"Q-{i:04d}"
             q_text = q.get("question", "")
+            ans_type = q.get("answer_type", "money")
             gold = q.get("answer", q.get("answer_gold"))
 
-            res = self.answer_question(q_text)
+            res = self.answer_question(q_text, answer_type=ans_type)
             ans = res["answer"]
 
-            submissions.append({"qid": qid, "answer": ans})
+            submissions.append({"question_id": qid, "answer": ans})
             detailed_results.append({
                 "qid": qid,
                 "question": q_text,
@@ -71,20 +90,28 @@ class BidIntelligencePipeline:
                 "pattern": res["pattern"]
             })
 
-            print(f"  [{i:02d}/{len(questions):02d}] {qid:12s} Pattern: {res['pattern']:22s} Answer: {ans} (Gold: {gold})")
+            gold_str = f" (Gold: {gold})" if gold is not None else ""
+            print(f"  [{i:03d}/{len(questions):03d}] {qid:12s} Pattern: {res['pattern']:22s} Answer: {ans}{gold_str}")
 
-        # Write submission JSONL
-        with open(output_file, "w", encoding="utf-8") as f:
-            for item in submissions:
-                f.write(json.dumps(item) + "\n")
+        # Write output based on extension (.csv vs .jsonl)
+        if str(output_file).endswith(".csv"):
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["question_id", "answer"])
+                for item in submissions:
+                    writer.writerow([item["question_id"], item["answer"]])
+        else:
+            with open(output_file, "w", encoding="utf-8") as f:
+                for item in submissions:
+                    f.write(json.dumps({"qid": item["question_id"], "answer": item["answer"]}) + "\n")
 
-        print(f"\nWritten predictions to {output_file}")
+        print(f"\nWritten {len(submissions)} predictions to {output_file}")
         return detailed_results
 
 def main():
     parser = argparse.ArgumentParser(description="Bid Intelligence Pipeline")
-    parser.add_argument("--questions", default="../sample_questions.json", help="Path to input questions JSON")
-    parser.add_argument("--output", default="sample_submission.jsonl", help="Path to output submission JSONL")
+    parser.add_argument("--questions", default="../questions.json", help="Path to input questions JSON")
+    parser.add_argument("--output", default="submission.csv", help="Path to output submission CSV/JSONL")
     parser.add_argument("--question", help="Single natural language question string")
     parser.add_argument("--no-llm", action="store_true", help="Run in deterministic math mode without LLM calls")
     args = parser.parse_args()

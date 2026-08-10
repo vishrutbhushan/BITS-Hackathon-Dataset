@@ -1,10 +1,11 @@
 """
 retriever.py — Subtask Retriever Node
-Executes DAG subtasks against DuckDB via Full-Text Search (BM25) and Relational SQL.
+Executes DAG subtasks against DuckDB via Full-Text Search (BM25) and Relational SQL across all 21 reasoning patterns.
 """
 
 import re
 import sys
+import statistics
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
@@ -54,7 +55,102 @@ class SubtaskRetriever:
                 sql_type = task.query_params.get("sql_type", "")
                 rows = []
 
-                if sql_type == "absence":
+                if sql_type == "collection_rate":
+                    client = task.query_params.get("client") or plan.anchor_client
+                    pkg_num = task.query_params.get("pkg_num") or plan.anchor_package_num
+                    person = task.query_params.get("person") or plan.anchor_person
+                    
+                    if not client and pkg_num:
+                        r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE package_number = ?", [pkg_num])
+                        if r_c: client = r_c[0][0]
+                    if not client and person:
+                        r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE project_lead ILIKE ? ORDER BY completion_date DESC", [f"%{person}%"])
+                        if r_c: client = r_c[0][0]
+
+                    sql = """
+                        SELECT SUM(received_inr), SUM(invoiced_inr), SUM(outstanding_inr), COUNT(*)
+                        FROM workbooks_receivables
+                        WHERE canonical_client = ? OR canonical_client ILIKE ?
+                    """
+                    df = self.db.fetchall(sql, [client, f"%{client}%"])
+                    rcv, inv, out, cnt = df[0] if df and df[0][1] else (0, 0, 0, 0)
+                    pct = round((rcv / inv) * 100, 2) if inv and inv > 0 else 0.0
+                    res.computed_value = pct
+                    res.sql_rows = [{"client": client, "received_inr": rcv, "invoiced_inr": inv, "collection_pct": pct}]
+                    res.summary = f"Client '{client}' received {rcv} / {inv} billed -> {pct}% collected."
+
+                elif sql_type == "unbilled_gap":
+                    client = task.query_params.get("client") or plan.anchor_client
+                    # Awarded total from projects
+                    sql_awarded = "SELECT SUM(contract_value_inr) FROM projects WHERE canonical_client = ? OR canonical_client ILIKE ?"
+                    df_awarded = self.db.fetchall(sql_awarded, [client, f"%{client}%"])
+                    awarded = df_awarded[0][0] or 0
+
+                    # Invoiced total from workbooks_receivables
+                    sql_inv = "SELECT SUM(invoiced_inr) FROM workbooks_receivables WHERE canonical_client = ? OR canonical_client ILIKE ?"
+                    df_inv = self.db.fetchall(sql_inv, [client, f"%{client}%"])
+                    invoiced = df_inv[0][0] or 0
+
+                    gap = awarded - invoiced
+                    res.computed_value = gap
+                    res.sql_rows = [{"client": client, "awarded_inr": awarded, "invoiced_inr": invoiced, "unbilled_gap": gap}]
+                    res.summary = f"Client '{client}' Awarded: {awarded} - Invoiced: {invoiced} = Shortfall: {gap} INR."
+
+                elif sql_type == "client_portfolio_values":
+                    client = task.query_params.get("client") or plan.anchor_client
+                    pkg_num = task.query_params.get("pkg_num") or plan.anchor_package_num
+                    person = task.query_params.get("person") or plan.anchor_person
+                    
+                    if not client and pkg_num:
+                        r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE package_number = ?", [pkg_num])
+                        if r_c: client = r_c[0][0]
+                    if not client and person:
+                        r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE project_lead ILIKE ? ORDER BY completion_date DESC", [f"%{person}%"])
+                        if r_c: client = r_c[0][0]
+
+                    sql = "SELECT contract_value_inr FROM projects WHERE canonical_client = ? OR canonical_client ILIKE ?"
+                    df = self.db.fetchall(sql, [client, f"%{client}%"])
+                    vals = [r[0] for r in df if r[0] is not None]
+                    if vals:
+                        mean_val = sum(vals) / len(vals)
+                        med_val = statistics.median(vals)
+                        diff = int(round(mean_val - med_val))
+                        res.computed_value = diff
+                        res.sql_rows = [{"client": client, "count": len(vals), "mean": mean_val, "median": med_val, "mean_minus_median": diff}]
+                        res.summary = f"Client '{client}' ({len(vals)} works): Mean ({mean_val:.1f}) - Median ({med_val:.1f}) = {diff} INR."
+
+                elif sql_type == "category_diff":
+                    client = task.query_params.get("client") or plan.anchor_client
+                    cats = task.query_params.get("categories", [])
+                    if len(cats) >= 2:
+                        cat1, cat2 = cats[0], cats[1]
+                        df1 = self.db.fetchall("SELECT SUM(contract_value_inr) FROM projects WHERE (canonical_client = ? OR canonical_client ILIKE ?) AND category ILIKE ?", [client, f"%{client}%", f"%{cat1}%"])
+                        df2 = self.db.fetchall("SELECT SUM(contract_value_inr) FROM projects WHERE (canonical_client = ? OR canonical_client ILIKE ?) AND category ILIKE ?", [client, f"%{client}%", f"%{cat2}%"])
+                        v1 = df1[0][0] or 0
+                        v2 = df2[0][0] or 0
+                        diff = abs(v1 - v2)
+                        res.computed_value = diff
+                        res.summary = f"Client '{client}': {cat1} ({v1}) vs {cat2} ({v2}) diff = {diff} INR."
+
+                elif sql_type == "yoy_movement":
+                    client = task.query_params.get("client") or plan.anchor_client
+                    y1 = task.query_params.get("year1", 2020)
+                    y2 = task.query_params.get("year2", 2022)
+
+                    sql_y1 = "SELECT SUM(contract_value_inr) FROM projects WHERE (canonical_client = ? OR canonical_client ILIKE ?) AND completion_year = ?"
+                    df_y1 = self.db.fetchall(sql_y1, [client, f"%{client}%", y1])
+                    val1 = df_y1[0][0] or 0
+
+                    sql_y2 = "SELECT SUM(contract_value_inr) FROM projects WHERE (canonical_client = ? OR canonical_client ILIKE ?) AND completion_year = ?"
+                    df_y2 = self.db.fetchall(sql_y2, [client, f"%{client}%", y2])
+                    val2 = df_y2[0][0] or 0
+
+                    diff = abs(val2 - val1)
+                    res.computed_value = diff
+                    res.sql_rows = [{"client": client, f"val_{y1}": val1, f"val_{y2}": val2, "movement_inr": diff}]
+                    res.summary = f"Client '{client}' {y1} ({val1}) to {y2} ({val2}) movement = {diff} INR."
+
+                elif sql_type == "absence":
                     client = task.query_params.get("client") or plan.anchor_client
                     sql = """
                         SELECT project_id, title, canonical_client, contract_value_inr, 
@@ -99,17 +195,24 @@ class SubtaskRetriever:
                 elif sql_type == "project_date":
                     proj = task.query_params.get("project") or plan.anchor_project
                     pkg_num = task.query_params.get("pkg_num") or plan.anchor_package_num
+                    person = task.query_params.get("person") or plan.anchor_person
                     
                     if not pkg_num and proj:
-                        m_pkg = re.search(r'Pkg-(\d+)|Package\s*(\d+)', proj, re.I)
-                        if m_pkg: pkg_num = int(m_pkg.group(1) or m_pkg.group(2))
+                        m_pkg = re.search(r'Pkg-(\d+)|pkg\s*(\d+)|Package\s*(\d+)', proj, re.I)
+                        if m_pkg: pkg_num = int(m_pkg.group(1) or m_pkg.group(2) or m_pkg.group(3))
 
                     if pkg_num:
                         sql = "SELECT project_id, title, completion_date, contract_value_inr, project_lead, canonical_client FROM projects WHERE package_number = ?"
                         df = self.db.fetchall(sql, [pkg_num])
-                    else:
+                    elif proj:
                         sql = "SELECT project_id, title, completion_date, contract_value_inr, project_lead, canonical_client FROM projects WHERE title ILIKE ?"
                         df = self.db.fetchall(sql, [f"%{proj}%"])
+                    elif person:
+                        sql = "SELECT project_id, title, completion_date, contract_value_inr, project_lead, canonical_client FROM projects WHERE project_lead ILIKE ? ORDER BY completion_date DESC"
+                        df = self.db.fetchall(sql, [f"%{person}%"])
+                    else:
+                        df = []
+                        
                     rows = [{"project_id": r[0], "title": r[1], "comp_date": r[2], "val_inr": r[3], "lead": r[4], "client": r[5]} for r in df]
                     res.sql_rows = rows
                     if rows:
@@ -135,13 +238,17 @@ class SubtaskRetriever:
                     client = task.query_params.get("client") or plan.anchor_client
                     pkg_num = task.query_params.get("pkg_num") or plan.anchor_package_num
                     proj = task.query_params.get("proj") or plan.anchor_project
+                    person = task.query_params.get("person") or plan.anchor_person
 
-                    if not client and (pkg_num or proj):
+                    if not client:
                         if not pkg_num and proj:
-                            m_pkg = re.search(r'Pkg-(\d+)', proj, re.I)
-                            if m_pkg: pkg_num = int(m_pkg.group(1))
+                            m_pkg = re.search(r'Pkg-(\d+)|pkg\s*(\d+)', proj, re.I)
+                            if m_pkg: pkg_num = int(m_pkg.group(1) or m_pkg.group(2))
                         if pkg_num:
                             r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE package_number = ?", [pkg_num])
+                            if r_c: client = r_c[0][0]
+                        elif person:
+                            r_c = self.db.fetchall("SELECT canonical_client FROM projects WHERE project_lead ILIKE ? ORDER BY completion_date DESC", [f"%{person}%"])
                             if r_c: client = r_c[0][0]
 
                     sql = """
