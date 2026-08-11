@@ -200,9 +200,9 @@ class IntentPlanner:
         "role_split", "threshold_aggregate", "unbilled_gap", "yoy_movement",
     }
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, semantic_router: Optional[Any] = None):
         self.db = get_db(db_path or DEFAULT_DB_PATH)
-        self.entities = EntityResolver(self.db)
+        self.entities = EntityResolver(self.db, semantic_router=semantic_router)
         self.known_engineers = self.entities.engineers
         self.known_clients = self.entities.clients
         self.known_projects = self.entities.projects
@@ -463,12 +463,29 @@ class IntentPlanner:
         client_res = self.entities.resolve_client(question)
         if not project_res.value and not client_res.value and not person_res.ambiguous:
             fts_project = self.entities.resolve_project_via_fts(question, person)
-            if fts_project.value:
+            dense_project = self.entities.resolve_project_dense(question, person)
+            # Independent sparse+dense agreement is stronger than either
+            # fallback alone. A confident dense-only match covers unseen
+            # descriptions; a sparse-only match preserves prior behavior.
+            if (
+                fts_project.value
+                and dense_project.value
+                and fts_project.value["package_number"] == dense_project.value["package_number"]
+            ):
+                project_res = type(fts_project)(
+                    fts_project.value,
+                    min(0.95, max(fts_project.confidence, dense_project.confidence) + 0.04),
+                    "hybrid_sparse_dense_project",
+                )
+            elif fts_project.value:
                 project_res = fts_project
+            elif dense_project.value:
+                project_res = dense_project
+            if project_res.value:
                 package = project_res.value["package_number"]
                 if not person and project_res.value.get("lead"):
                     person = project_res.value["lead"]
-                    person_res = type(person_res)(person, fts_project.confidence, "fts_project_lead")
+                    person_res = type(person_res)(person, project_res.confidence, f"{project_res.source}_lead")
         project_record = project_res.value or self.entities.project_for_package(package)
 
         credential_res = self.entities.resolve_credential(question)

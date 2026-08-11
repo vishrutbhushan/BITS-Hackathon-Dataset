@@ -63,8 +63,9 @@ class Resolution:
 class EntityResolver:
     """Resolve corpus entities with exact, alias, and conservative fuzzy passes."""
 
-    def __init__(self, db):
+    def __init__(self, db, semantic_router: Optional[Any] = None):
         self.db = db
+        self.semantic_router = semantic_router
         self.engineers = sorted(
             {row[0].strip() for row in db.fetchall("SELECT full_name FROM engineers") if row[0]},
             key=len,
@@ -82,11 +83,12 @@ class EntityResolver:
                 "client": row[2],
                 "lead": row[3],
                 "state": row[4],
-                "document_ids": tuple(doc for doc in row[5:8] if doc),
+                "category": row[5],
+                "document_ids": tuple(doc for doc in row[6:9] if doc),
             }
             for row in db.fetchall(
                 """
-                SELECT title, package_number, canonical_client, project_lead, state,
+                SELECT title, package_number, canonical_client, project_lead, state, category,
                        ccc_doc_id, cc_doc_id, ref_doc_id
                 FROM projects
                 WHERE title IS NOT NULL AND package_number IS NOT NULL
@@ -115,6 +117,8 @@ class EntityResolver:
         )
         self._people_by_first = self._index_first_names(self.engineers)
         self._client_aliases = self._build_client_aliases()
+        if self.semantic_router is not None:
+            self.semantic_router.register_projects(self.projects)
 
     @staticmethod
     def _index_first_names(names: Iterable[str]) -> Dict[str, List[str]]:
@@ -374,4 +378,29 @@ class EntityResolver:
             confidence,
             "fts_project",
             tuple(item[1]["package_number"] for item in candidates[1:4]),
+        )
+
+    def resolve_project_dense(self, question: str, person: Optional[str] = None) -> Resolution:
+        """Resolve a descriptive project only on a high-margin dense match.
+
+        Package IDs and lexical title matches are evaluated first.  Dense
+        retrieval exists for unseen paraphrases and never overrides those
+        stronger graph-backed signals.
+        """
+        if self.semantic_router is None or not self.semantic_router.enabled:
+            return Resolution(None, 0.0, "dense_disabled")
+        signal = self.semantic_router.rank_projects(question, person)
+        if signal.project is None:
+            return Resolution(
+                None,
+                0.0,
+                "dense_project_inconclusive",
+                signal.alternatives,
+            )
+        confidence = min(0.91, 0.66 + signal.margin * 2.0)
+        return Resolution(
+            signal.project,
+            confidence,
+            "dense_project",
+            signal.alternatives,
         )

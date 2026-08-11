@@ -11,12 +11,13 @@ CURRENT_DIR = Path(__file__).resolve().parent
 sys.path[:0] = [str(CURRENT_DIR), str(CURRENT_DIR / "agent"), str(CURRENT_DIR / "db")]
 
 from entity_resolver import EntityResolver
-from agentic_controller import AgenticController
+from agentic_controller import AgenticController, OPERATOR_SPECS
 from ensemble_controller import AgreementEnsemble
 from intent_planner import ExecutionPlan, IntentPlanner
 from pipeline import BidIntelligencePipeline
 from reasoner import ReasonerNode
 from retriever import RetrievalContext, SubtaskRetriever
+from semantic_router import DenseSemanticRouter, OPERATOR_PROTOTYPES, PlanReranker
 from database import get_db
 from db.build_database import normalize_inr
 
@@ -583,6 +584,89 @@ class ArchitectureTests(unittest.TestCase):
             """
         )[0][0]
         self.assertEqual(self.retriever.execute_plan(plan).candidate_answer, expected)
+
+    def test_asset_replan_rejects_infrastructure_plant_polysemy(self):
+        seed = self.planner.plan(
+            "Compare water treatment plant projects with road projects for the client.",
+            "money",
+        )
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=False
+        )
+        with self.assertRaisesRegex(ValueError, "asset/register semantics"):
+            controller._compile_decision(
+                seed,
+                {
+                    "pattern": "plant_asset_valuation",
+                    "confidence": 0.99,
+                    "slots": {},
+                },
+            )
+
+    @unittest.skipUnless(
+        (CURRENT_DIR / "models" / "Qwen3-Embedding-0.6B" / "config.json").exists(),
+        "local embedding checkpoint is optional",
+    )
+    def test_dense_router_handles_unseen_semantic_paraphrases(self):
+        cases = [
+            ("What balance is still owed on issued invoices?", "money", "ar_outstanding"),
+            ("Reconcile awarded scope against claims raised.", "money", "unbilled_gap"),
+            ("Give the cumulative value of every job for this buyer.", "money", "hop_aggregate"),
+            ("How much more is required to reach two crore?", "money", "gap_to_threshold"),
+            ("What percentage of invoiced cash has arrived?", "percent", "collection_rate"),
+            ("How many projects lack a completion endorsement?", "count", "absence"),
+        ]
+        router = DenseSemanticRouter(OPERATOR_SPECS)
+        stats = router.prepare_questions([question for question, _type, _expected in cases])
+        self.assertEqual(stats["embedded"], len(cases))
+        for question, answer_type, expected in cases:
+            with self.subTest(expected=expected):
+                signal = router.rank_operators(question, answer_type)
+                self.assertEqual(signal.operator, expected)
+                self.assertTrue(router.is_strong(signal))
+
+    @unittest.skipUnless(
+        (CURRENT_DIR / "models" / "Qwen3-Reranker-0.6B" / "config.json").exists(),
+        "local reranker checkpoint is optional",
+    )
+    def test_cross_encoder_separates_adversarial_operator_pairs(self):
+        cases = [
+            ("What balance is still owed on issued invoices?", "ar_outstanding", "unbilled_gap"),
+            ("Combine irrigation and bridge project values.", "category_aggregate", "category_diff"),
+            ("How much more is required to reach two crore?", "gap_to_threshold", "threshold_aggregate"),
+        ]
+        pairs = []
+        for question, correct, confuser in cases:
+            pairs.extend(
+                [
+                    (question, OPERATOR_PROTOTYPES[correct][0]),
+                    (question, OPERATOR_PROTOTYPES[confuser][0]),
+                ]
+            )
+        scores = PlanReranker().score(pairs)
+        self.assertEqual(len(scores), len(pairs))
+        for correct_score, confuser_score in zip(scores[::2], scores[1::2]):
+            self.assertGreater(correct_score, confuser_score)
+
+    def test_relaxed_gate_requires_strong_cross_encoder_margin(self):
+        agent = AgenticController(
+            self.planner, self.retriever, enabled=False
+        )
+        ensemble = AgreementEnsemble(agent)
+        corroborated = SimpleNamespace(
+            reranker_scores={"legacy": 0.02, "current": 0.98}
+        )
+        ambiguous = SimpleNamespace(
+            reranker_scores={"legacy": 0.91, "current": 0.95}
+        )
+        self.assertEqual(
+            ensemble._required_confidence(corroborated, "current"),
+            ensemble.corroborated_confidence,
+        )
+        self.assertEqual(
+            ensemble._required_confidence(ambiguous, "current"),
+            ensemble.switch_confidence,
+        )
 
     def test_boq_variance_uses_all_measurement_rows(self):
         contract_id, item_no, tender = self.db.fetchall(

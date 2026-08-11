@@ -25,8 +25,9 @@ sys.path.append(str(CURRENT_DIR / "db"))
 from intent_planner import IntentPlanner, ExecutionPlan
 from retriever import SubtaskRetriever, RetrievalContext
 from reasoner import ReasonerNode
-from agentic_controller import AgenticController
+from agentic_controller import AgenticController, OPERATOR_SPECS
 from ensemble_controller import AgreementEnsemble
+from semantic_router import DenseSemanticRouter, PlanReranker
 
 class BidIntelligencePipeline:
     def __init__(
@@ -35,12 +36,19 @@ class BidIntelligencePipeline:
         use_agentic: Optional[bool] = None,
         agentic_client: Optional[Any] = None,
     ):
-        self.planner = IntentPlanner()
+        agentic_enabled = use_llm if use_agentic is None else use_agentic
+        # Dense retrieval is a third, deterministic semantic signal. It is
+        # enabled with the ensemble and remains optional when the local model
+        # is absent.
+        self.semantic_router = DenseSemanticRouter(
+            OPERATOR_SPECS, enabled=agentic_enabled
+        )
+        self.plan_reranker = PlanReranker(enabled=agentic_enabled)
+        self.planner = IntentPlanner(semantic_router=self.semantic_router)
         self.retriever = SubtaskRetriever()
         # ``use_llm`` remains a compatibility argument, but model compute now
         # lives entirely in the control plane.  The final answer is always a
         # typed DuckDB/arithmetic result, never free-form model output.
-        agentic_enabled = use_llm if use_agentic is None else use_agentic
         self.controller = AgenticController(
             self.planner,
             self.retriever,
@@ -48,7 +56,13 @@ class BidIntelligencePipeline:
             client=agentic_client,
         )
         self.ensemble = (
-            AgreementEnsemble(self.controller) if agentic_enabled else None
+            AgreementEnsemble(
+                self.controller,
+                semantic_router=self.semantic_router,
+                plan_reranker=self.plan_reranker,
+            )
+            if agentic_enabled
+            else None
         )
         self.reasoner = ReasonerNode(use_llm=False)
 
@@ -156,6 +170,18 @@ class BidIntelligencePipeline:
         submissions = []
         detailed_results = []
 
+        ensemble = getattr(self, "ensemble", None)
+        if ensemble is not None:
+            semantic_stats = ensemble.prepare_semantics(
+                [q.get("question", "") for q in questions]
+            )
+            if semantic_stats["embedded"]:
+                print(
+                    "Dense semantic index: "
+                    f"embedded {semantic_stats['embedded']} unique questions "
+                    "and released encoder weights."
+                )
+
         # Pre-execute relational candidates serially, then batch only the
         # model control decisions.  This cuts network round trips without
         # sharing a DuckDB connection across worker threads.
@@ -165,7 +191,6 @@ class BidIntelligencePipeline:
             ans_type = q.get("answer_type", "money")
             plan, context = self._seed_execution(q_text, ans_type)
             seeded.append((plan, context))
-        ensemble = getattr(self, "ensemble", None)
         if ensemble is not None:
             batch_stats = ensemble.prepare_batch(seeded)
             if batch_stats["disagreements"]:
@@ -176,7 +201,11 @@ class BidIntelligencePipeline:
                     f"{batch_stats['total']} total, "
                     f"{batch_stats['arbitration_batches']} arbitration batches, "
                     f"{batch_stats['verification_batches']} verification batches, "
-                    f"{batch_stats['current_switches']} two-pass challenger switches."
+                    f"{batch_stats['dense_challenges']} dense challenges, "
+                    f"{batch_stats['dense_filtered']} filtered before Qwen, "
+                    f"{batch_stats['reranked_pairs']} cross-encoded plans, "
+                    f"{batch_stats['current_switches']} current and "
+                    f"{batch_stats['dense_switches']} dense two-pass switches."
                 )
 
         for i, (q, seed) in enumerate(zip(questions, seeded), 1):

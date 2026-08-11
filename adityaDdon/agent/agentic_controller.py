@@ -51,7 +51,7 @@ OPERATOR_SPECS: Dict[str, Dict[str, Any]] = {
     "temporal_chain": {"types": {"money"}, "requires": {"person"}, "meaning": "sum projects completed after an engineer's credential issue date"},
     "yoy_movement": {"types": {"money"}, "requires": {"client", "years"}, "meaning": "absolute change in completed project value between two calendar years"},
     "hop_aggregate": {"types": {"money"}, "requires": {"client"}, "meaning": "sum the complete project portfolio for a client"},
-    "plant_asset_valuation": {"types": {"money"}, "requires": set(), "meaning": "sum acquisition cost of assets matching register filters"},
+    "plant_asset_valuation": {"types": {"money"}, "requires": {"asset_scope"}, "meaning": "sum acquisition cost of assets matching register filters"},
     "boq_quantity_variance": {"types": {"money"}, "requires": {"contract"}, "meaning": "measured BOQ quantity minus tender quantity"},
 }
 
@@ -764,6 +764,18 @@ There must be exactly one decision per id. A null slot preserves its current val
             raise AgentDecisionError("operator requires a canonical delivery role")
         if "contract" in required and slots.get("contract_id") is None:
             raise AgentDecisionError("operator requires an explicit contract identifier")
+        if "asset_scope" in required:
+            question = str(slots.get("question") or "").lower()
+            asset_noun = re.search(r"\b(?:asset|assets|equipment|machinery|fleet|register)\b", question)
+            qualified_plant = re.search(
+                r"\bplant\b.{0,40}\b(?:acquisition|cost|owned|ownership|rent|rented|lease|safety|condition)\b"
+                r"|\b(?:acquisition|cost|owned|ownership|rent|rented|lease|safety|condition)\b.{0,40}\bplant\b",
+                question,
+            )
+            if not asset_noun and not qualified_plant:
+                raise AgentDecisionError(
+                    "asset valuation requires explicit asset/register semantics"
+                )
 
     def _verify(
         self,

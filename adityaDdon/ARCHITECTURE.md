@@ -13,20 +13,27 @@
 3. `SubtaskRetriever` executes the declared DAG in dependency order. Exact
    canonical keys scope SQL; arithmetic uses dependency outputs rather than
    global mutable state or implicit dates.
-4. `legacy/` preserves the last stable typed planner/retriever as an independent
-   incumbent. `AgreementEnsemble` executes both architectures. Equal numeric
-   results are accepted without model compute; only genuine disagreements are
-   sent to the semantic arbiter.
-5. The arbiter sees the question and two typed plan descriptions, never their
-   numeric answers. Candidate A/B order is stable-randomized per question. A
-   challenger switch needs confidence at or above the configured threshold in
-   both an arbitration pass and a position-reversed verification pass. Any
-   timeout, malformed JSON, omitted item, or inconsistent vote keeps the stable
-   incumbent.
-6. `ReasonerNode` only returns a typed execution result. The language model is
+4. `DenseSemanticRouter` uses instruction-aware Qwen3-Embedding-0.6B vectors
+   for typed-operator recall and descriptive-project retrieval. Package IDs,
+   graph edges, and exact names retain precedence. Corpus embeddings are cached
+   by content fingerprint; question vectors remain ephemeral.
+5. `legacy/` preserves the last stable typed planner/retriever as an independent
+   incumbent. `AgreementEnsemble` executes both relational architectures. A
+   dense alternate must pass operator preconditions and compile into the same
+   typed DuckDB tool boundary before it becomes a candidate.
+6. Qwen3-Reranker-0.6B cross-encodes question/plan pairs. It filters weak dense
+   recalls and may lower the generator confidence gate only when its relevance
+   score and margin are both strong. Encoder and reranker weights are released
+   before the 9B control model runs, keeping peak memory bounded on a 16 GB Mac.
+7. The arbiter sees the question, typed plan descriptions, and semantic scores,
+   never numeric answers. Candidate order is deterministically shifted between
+   passes. A challenger must be selected in both passes. Any timeout, malformed
+   JSON, omitted item, inconsistent vote, or failed compiler precondition keeps
+   the stable incumbent.
+8. `ReasonerNode` only returns a typed execution result. The language model is
    a bounded control plane and cannot calculate, copy, or directly modify an
    answer.
-7. `BidIntelligencePipeline` applies type-aware formatting. A failure in one
+9. `BidIntelligencePipeline` applies type-aware formatting. A failure in one
    question is isolated, enriched with BM25 evidence, and cannot abort the
    batch.
 
@@ -59,6 +66,10 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-local-mlx.txt
 .venv/bin/hf download mlx-community/Qwen3.5-9B-4bit \
   --local-dir models/Qwen3.5-9B-4bit
+.venv/bin/hf download Qwen/Qwen3-Embedding-0.6B \
+  --local-dir models/Qwen3-Embedding-0.6B
+.venv/bin/hf download Qwen/Qwen3-Reranker-0.6B \
+  --local-dir models/Qwen3-Reranker-0.6B
 ./run_local_agent.sh
 ```
 
@@ -76,10 +87,11 @@ python pipeline.py --questions ../sample_questions.json \
 python ../evaluate.py --submission /tmp/sample.csv \
   --questions ../sample_questions.json
 python pipeline.py --questions ../questions.json \
-  --output submission_ensemble.csv
+  --output submission_sota_hybrid.csv
 ```
 
 `test_architecture.py` uses synthetic/metamorphic questions and SQL-derived
-expectations, including model-outage fallback, zero-call agreement, and
-position-bias reversal. `validator.py` checks 14 extraction and cross-table
-invariants.
+expectations, including model-outage fallback, zero-call agreement,
+position-bias reversal, dense paraphrase routing, adversarial cross-encoder
+pairs, and asset/project polysemy. `validator.py` checks 14 extraction and
+cross-table invariants.
