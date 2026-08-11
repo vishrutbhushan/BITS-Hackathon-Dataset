@@ -1,0 +1,512 @@
+{
+  "Project": {
+    "description": "Infrastructure construction and civil engineering works executed or bid by National Infrastructure Corp. Ltd. between 2010 and 2025 across Indian states.",
+    "category": "Project",
+    "aliases": [
+      "Work",
+      "Assignment",
+      "Job",
+      "Contract",
+      "Package",
+      "Scheme",
+      "Project Particulars"
+    ],
+    "naming_convention": "{Project Type} \u2014 {State} Pkg-{Number} (e.g., 'Greenfield Expressway \u2014 West Bengal Pkg-110', 'RCC Bridge \u2014 Gujarat Pkg-1')",
+    "sample_entities": [],
+    "document_sources": [
+      "company_completion_certificate",
+      "completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "performance_bond",
+      "cv",
+      "ra_bill",
+      "final_ra_bill",
+      "tender_dossier",
+      "boq_workbook"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Client",
+        "relation_type": "commissioned_by",
+        "cardinality": "N:1",
+        "description": "Each project is commissioned by a government department or private developer."
+      },
+      {
+        "target_entity": "Engineer",
+        "relation_type": "managed_by",
+        "cardinality": "N:1",
+        "description": "Each project is led by a designated Project Manager/Project Lead."
+      },
+      {
+        "target_entity": "Contract",
+        "relation_type": "governed_by",
+        "cardinality": "1:1",
+        "description": "Each project corresponds to a contract or package ID."
+      },
+      {
+        "target_entity": "Performance Bond",
+        "relation_type": "secured_by",
+        "cardinality": "1:0..1",
+        "description": "Projects under formal contract may have bank guarantees issued."
+      },
+      {
+        "target_entity": "Reference Letter",
+        "relation_type": "attested_by",
+        "cardinality": "1:0..1",
+        "description": "Client testimonial verifying successful handover (132/155 works)."
+      },
+      {
+        "target_entity": "Completion Certificate",
+        "relation_type": "certified_by",
+        "cardinality": "1:1",
+        "description": "Formal sign-off containing client grading and final values."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Client": {
+    "description": "Government departments, statutory authorities, state municipal corporations, and private engineering enterprises that tender, award, and finance infrastructure projects.",
+    "category": "Organization",
+    "aliases": [
+      "Employer",
+      "Tender Inviting Authority",
+      "Department",
+      "Authority",
+      "Corporation",
+      "Commissioning Body"
+    ],
+    "naming_convention": "Official institutional names including state or corporate suffixes (e.g., 'National Special Projects Office', 'Jal Nigam, Jharkhand', 'Public Health Engineering Dept, Gujarat', 'Lakshya Engineering & Construction')",
+    "sample_entities": [],
+    "document_sources": [
+      "completion_certificate",
+      "company_completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "performance_bond",
+      "tender_dossier",
+      "ra_bill",
+      "final_ra_bill",
+      "ageing_workbook"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Project",
+        "relation_type": "commissions",
+        "cardinality": "1:N",
+        "description": "A client awards multiple packages or project contracts."
+      },
+      {
+        "target_entity": "Completion Certificate",
+        "relation_type": "issues",
+        "cardinality": "1:N",
+        "description": "Issues official completion certificates and assigns performance grades."
+      },
+      {
+        "target_entity": "Reference Letter",
+        "relation_type": "provides",
+        "cardinality": "1:0..N",
+        "description": "Provides formal recommendation letters on request."
+      },
+      {
+        "target_entity": "Invoice",
+        "relation_type": "billed_to",
+        "cardinality": "1:N",
+        "description": "Receives RA bills and makes milestone payments recorded in receivables ageing."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Engineer": {
+    "description": "Key technical personnel and Project Managers employed by National Infrastructure Corp. Ltd. responsible for site execution, project delivery, and statutory compliance.",
+    "category": "Person",
+    "aliases": [
+      "Project Manager",
+      "Project Lead",
+      "Key Personnel",
+      "Lead Engineer",
+      "Credential Holder",
+      "Site In-charge"
+    ],
+    "naming_convention": "Full proper personal names (e.g., 'Asha Nair', 'Chandan Banerjee', 'Neha Chopra', 'Rahul Menon', 'Gautam Joshi', 'Naveen Roy', 'Suresh Desai')",
+    "sample_entities": [],
+    "document_sources": [
+      "cv",
+      "personnel_certificate",
+      "company_completion_certificate",
+      "annual_report",
+      "tender_dossier"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Project",
+        "relation_type": "led_work",
+        "cardinality": "1:N",
+        "description": "Leads execution of specific infrastructure projects."
+      },
+      {
+        "target_entity": "Certificate",
+        "relation_type": "holds_credential",
+        "cardinality": "1:N",
+        "description": "Holds PMP, Six Sigma Black Belt, or other professional credentials."
+      },
+      {
+        "target_entity": "Business Unit",
+        "relation_type": "assigned_to",
+        "cardinality": "N:1",
+        "description": "Belongs to a specific corporate business unit."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Certificate": {
+    "description": "Professional certifications, accreditations, and qualifications held by employees (e.g., PMP, Six Sigma Black Belt) or company-wide quality accreditations (ISO 9001, 14001, 45001).",
+    "category": "Credential",
+    "aliases": [
+      "Credential",
+      "Professional Certification",
+      "ISO Accreditation",
+      "PMP Credential",
+      "Six Sigma Black Belt"
+    ],
+    "naming_convention": "Standard credential ID (e.g., 'PMI-200006', 'SSBB-100012', 'ORG-1001')",
+    "sample_entities": [],
+    "document_sources": [
+      "personnel_certificate",
+      "iso_certificate",
+      "compliance_matrix",
+      "cv",
+      "tender_dossier"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Engineer",
+        "relation_type": "awarded_to",
+        "cardinality": "N:1",
+        "description": "Associated with a specific employee ID and name."
+      },
+      {
+        "target_entity": "Project",
+        "relation_type": "temporal_anchor",
+        "cardinality": "1:N",
+        "description": "Issue date acts as a temporal benchmark for qualifying projects led post-certification."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Tender": {
+    "description": "Formal bidding opportunities and RFPs issued by government clients for which National Infrastructure Corp. Ltd. prepared bids, compliance matrices, and bank guarantees.",
+    "category": "Procurement",
+    "aliases": [
+      "RFP",
+      "Tender Reference",
+      "Notice Inviting Tender",
+      "Bid Dossier",
+      "Tender Submission"
+    ],
+    "naming_convention": "RFP-{number} (e.g., 'RFP-132000485', 'RFP-132016005')",
+    "sample_entities": [],
+    "document_sources": [
+      "tender_dossier",
+      "compliance_matrix",
+      "performance_bond"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Client",
+        "relation_type": "invited_by",
+        "cardinality": "N:1",
+        "description": "Tender issued by client authority."
+      },
+      {
+        "target_entity": "Performance Bond",
+        "relation_type": "requires_security",
+        "cardinality": "1:N",
+        "description": "Tender mandates earnest money deposit or performance bank guarantee."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Bank": {
+    "description": "Commercial and public sector banking institutions providing current accounts, credit facilities, and issuing performance bank guarantees / letters of credit.",
+    "category": "Financial Institution",
+    "aliases": [
+      "Issuing Bank",
+      "Financial Institution",
+      "Guarantor Bank",
+      "Banker"
+    ],
+    "naming_convention": "Commercial bank names (e.g., 'Kalinga National Bank', 'Union Trust Bank of India')",
+    "sample_entities": [],
+    "document_sources": [
+      "bank_statement",
+      "performance_bond",
+      "annual_report",
+      "general_ledger_book",
+      "trial_balance_workbook"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Performance Bond",
+        "relation_type": "issues_guarantee",
+        "cardinality": "1:N",
+        "description": "Issues irrevocable bank guarantees on behalf of contractor."
+      },
+      {
+        "target_entity": "Ledger Entry",
+        "relation_type": "holds_account",
+        "cardinality": "1:N",
+        "description": "Underlies Bank Asset account 1010 and statement cash movements."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Performance Grade": {
+    "description": "Qualitative assessment awarded by the commissioning client officer on completion certificates evaluating the quality of execution, adherence to milestones, and contractor co-operation.",
+    "category": "Evaluation Metric",
+    "aliases": [
+      "Grading",
+      "Assessment",
+      "Client Performance Rating",
+      "Workmanship Quality"
+    ],
+    "naming_convention": "Discrete qualitative ratings: 'Outstanding', 'Excellent', 'Very Good', 'Satisfactory', 'Good', 'Fair', 'Poor'",
+    "sample_entities": [
+      "Outstanding",
+      "Excellent",
+      "Very Good",
+      "Satisfactory",
+      "Good"
+    ],
+    "document_sources": [
+      "completion_certificate",
+      "company_completion_certificate"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Project",
+        "relation_type": "rates_execution",
+        "cardinality": "N:1",
+        "description": "Defines the client's qualitative score for that completed work."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Performance Bond": {
+    "description": "Irrevocable, unconditional bank guarantee issued on non-judicial stamp paper against a specific contract or tender to secure performance obligations (typically 5% or 10% of contract value).",
+    "category": "Financial Instrument",
+    "aliases": [
+      "Bank Guarantee",
+      "PBG",
+      "Performance Bank Guarantee",
+      "Security Bond"
+    ],
+    "naming_convention": "BND-{number} (e.g., 'BND-00005')",
+    "sample_entities": [],
+    "document_sources": [
+      "performance_bond",
+      "compliance_matrix"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Bank",
+        "relation_type": "issued_by",
+        "cardinality": "N:1",
+        "description": "Guaranteed by issuing bank."
+      },
+      {
+        "target_entity": "Tender",
+        "relation_type": "references_tender",
+        "cardinality": "N:1",
+        "description": "Secures bid/contract under specific RFP reference."
+      }
+    ],
+    "confidence": "High"
+  },
+  "BOQ Item": {
+    "description": "Bill of Quantities line item specifying work descriptions, standard units of measurement, schedule rates, executed quantities, and billed amounts.",
+    "category": "Commercial Line Item",
+    "aliases": [
+      "Bill Item",
+      "Schedule Item",
+      "Measurement Item",
+      "Work Abstract Line"
+    ],
+    "naming_convention": "Item number with standard civil engineering descriptions (e.g., 'Earthwork in excavation', 'Wet mix macadam (WMM)', 'RCC M30 for structures', 'Reinforcement steel Fe500')",
+    "sample_entities": [],
+    "document_sources": [
+      "boq_workbook",
+      "ra_bill",
+      "final_ra_bill"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Project",
+        "relation_type": "item_of",
+        "cardinality": "N:1",
+        "description": "Belongs to a project contract BOQ schedule."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Invoice": {
+    "description": "Running Account (RA) bills and statutory tax invoices submitted to clients claiming interim or final payment for executed work.",
+    "category": "Billing Document",
+    "aliases": [
+      "RA Bill",
+      "Running Account Bill",
+      "Tax Invoice",
+      "Contractor's Bill",
+      "Bill No"
+    ],
+    "naming_convention": "AR-{year}-{number} or FIN/{contract_id} (e.g., 'AR-2021-00344', 'AR-2019-00007')",
+    "sample_entities": [],
+    "document_sources": [
+      "ra_bill",
+      "final_ra_bill",
+      "ageing_workbook",
+      "general_ledger_book",
+      "bank_statement"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Client",
+        "relation_type": "billed_to",
+        "cardinality": "N:1",
+        "description": "Claimed from project client."
+      },
+      {
+        "target_entity": "Project",
+        "relation_type": "billed_for",
+        "cardinality": "N:1",
+        "description": "Billed against contract work."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Ledger Entry": {
+    "description": "Double-entry bookkeeping journal transaction posted to company general ledger accounts recording revenue, expenses, asset additions, taxes, and bank transfers.",
+    "category": "Accounting Transaction",
+    "aliases": [
+      "Journal Voucher",
+      "Posted Line",
+      "Voucher",
+      "Narration",
+      "GL Line"
+    ],
+    "naming_convention": "Voucher / Narration with Date, Debit, Credit, Running Balance",
+    "sample_entities": [],
+    "document_sources": [
+      "general_ledger_book",
+      "trial_balance_workbook",
+      "financial_statement"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Bank",
+        "relation_type": "reconciles_with",
+        "cardinality": "N:1",
+        "description": "Account 1010 postings map directly to bank statement deposits/withdrawals."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Asset / Plant & Equipment": {
+    "description": "Heavy civil construction machinery, vehicles, batching plants, and equipment owned or leased by National Infrastructure Corp. Ltd.",
+    "category": "Physical Asset",
+    "aliases": [
+      "Plant & Machinery",
+      "Equipment",
+      "Asset",
+      "Fleet Item"
+    ],
+    "naming_convention": "Asset ID (1..N) with Type, Make, Acquisition Year, Cost, Condition, Location State, Ownership (owned/leased), Safety Certification status",
+    "sample_entities": [],
+    "document_sources": [
+      "asset_register_workbook",
+      "trial_balance_workbook",
+      "annual_report",
+      "tender_dossier"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Location",
+        "relation_type": "deployed_at",
+        "cardinality": "N:1",
+        "description": "Located in specific operational state."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Business Unit": {
+    "description": "Internal operational division within National Infrastructure Corp. Ltd. specializing in distinct infrastructure verticals.",
+    "category": "Organizational Unit",
+    "aliases": [
+      "BU",
+      "Division",
+      "Department",
+      "Vertical"
+    ],
+    "naming_convention": "Vertical names: 'Civil Construction & Infrastructure', 'Specialized Technical Services', 'Water & Environmental Engineering', 'Roads & Highways', 'Bridges & Structures', 'Industrial EPC'",
+    "sample_entities": [
+      "Civil Construction & Infrastructure",
+      "Specialized Technical Services",
+      "Water & Environmental Engineering",
+      "Roads & Highways",
+      "Bridges & Structures",
+      "Industrial EPC"
+    ],
+    "document_sources": [
+      "cv",
+      "annual_report"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Engineer",
+        "relation_type": "employs",
+        "cardinality": "1:N",
+        "description": "Houses project engineers and technical teams."
+      }
+    ],
+    "confidence": "High"
+  },
+  "Location / State": {
+    "description": "Geographical Indian state or union territory where construction projects are sited, assets are deployed, or clients are based.",
+    "category": "Geographic Entity",
+    "aliases": [
+      "State",
+      "Region",
+      "Site Location",
+      "Jurisdiction"
+    ],
+    "naming_convention": "Indian State names: 'West Bengal', 'Uttar Pradesh', 'Jharkhand', 'Gujarat', 'Maharashtra', 'Madhya Pradesh', 'Odisha', 'Tamil Nadu', 'Bihar', 'Delhi'",
+    "sample_entities": [
+      "West Bengal",
+      "Uttar Pradesh",
+      "Jharkhand",
+      "Gujarat",
+      "Maharashtra",
+      "Madhya Pradesh",
+      "Odisha",
+      "Tamil Nadu",
+      "Bihar",
+      "Delhi"
+    ],
+    "document_sources": [
+      "completion_certificate",
+      "company_completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "asset_register_workbook"
+    ],
+    "relationships": [
+      {
+        "target_entity": "Project",
+        "relation_type": "site_of",
+        "cardinality": "1:N",
+        "description": "State where infrastructure package is constructed."
+      }
+    ],
+    "confidence": "High"
+  }
+}

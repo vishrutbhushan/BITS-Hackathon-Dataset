@@ -236,3 +236,4 @@ vishrut/sample_check.py
 # Local inference artifacts (multi-GB, reproducible from model IDs)
 adityaDdon/models/
 adityaDdon/.model_cache/
+aditya/models/

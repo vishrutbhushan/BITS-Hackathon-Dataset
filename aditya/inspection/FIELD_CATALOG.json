@@ -1,0 +1,486 @@
+{
+  "project_name": {
+    "type": "string",
+    "format": "{Title} \u2014 {State} Pkg-{Number}",
+    "description": "The standardized canonical title of an infrastructure construction project package.",
+    "examples": [
+      "Greenfield Expressway \u2014 West Bengal Pkg-110",
+      "RCC Bridge \u2014 Gujarat Pkg-1",
+      "WTP Augmentation \u2014 Uttar Pradesh Pkg-2"
+    ],
+    "normalization": "Normalize unicode em-dashes (\u2014), en-dashes (\u2013), and hyphens (-) to standard ' \u2014 '. Strip trailing whitespace and parenthesis.",
+    "required_parser": "Regex & Layout Text Extractor (PyMuPDF / pdfplumber)",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio"
+    ]
+  },
+  "package_number": {
+    "type": "string",
+    "format": "Pkg-{Number}",
+    "description": "The specific procurement package number designating the contract slice.",
+    "examples": [
+      "Pkg-1",
+      "Pkg-115",
+      "Pkg-145",
+      "Pkg-51",
+      "Pkg-107",
+      "Pkg-125",
+      "Pkg-67",
+      "Pkg-62"
+    ],
+    "normalization": "Extract regex 'Pkg-(\\d+)' and format canonically as 'Pkg-{N}'.",
+    "required_parser": "Regex pattern extractor",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "cv"
+    ]
+  },
+  "client_name": {
+    "type": "string",
+    "format": "Proper Noun / Institutional Title",
+    "description": "The full legal or operational name of the government department, corporation, or private client.",
+    "examples": [
+      "National Special Projects Office",
+      "Jal Nigam, Jharkhand",
+      "Public Health Engineering Dept, Gujarat",
+      "Irrigation & Waterways Dept, Govt of Uttar Pradesh",
+      "Lakshya Engineering & Construction"
+    ],
+    "normalization": "Strip auxiliary labels such as '(government)', '(autonomous body)', '(private)'. Strip trailing commas, periods, and whitespace. Map recognized acronyms/aliases to canonical client ID.",
+    "required_parser": "Layout Text Extractor with Entity Normalizer",
+    "confidence": "High",
+    "document_locations": [
+      "completion_certificate",
+      "company_completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "ageing_workbook",
+      "tender_dossier",
+      "ra_bill"
+    ]
+  },
+  "contract_value_raw": {
+    "type": "string",
+    "format": "INR {X} Cr | {X} Lakh | {X,XX,XXX}",
+    "description": "The monetary contract or executed value as rendered in the document text.",
+    "examples": [
+      "INR 33.38 Cr",
+      "INR 200.00 Cr",
+      "3,338.00 Lakh",
+      "33,38,00,000",
+      "537933333"
+    ],
+    "normalization": "Retain original verbatim string for provenance; parsed to integer INR via parse_indian_currency.",
+    "required_parser": "Regex Pattern Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio",
+      "performance_bond",
+      "ra_bill",
+      "final_ra_bill"
+    ]
+  },
+  "contract_value_inr": {
+    "type": "integer",
+    "format": "Integer (exact Indian Rupees)",
+    "description": "The lossless integer representation in Rupees (1 Crore = 10,000,000 INR; 1 Lakh = 100,000 INR).",
+    "examples": [
+      333800000,
+      2000000000,
+      518200000,
+      244200000,
+      1944300000
+    ],
+    "normalization": "Multiplication factor: Cr -> * 10,000,000; Lakh -> * 100,000. Round to nearest integer.",
+    "required_parser": "Currency Normalization Engine",
+    "confidence": "High",
+    "document_locations": [
+      "Derived from contract_value_raw, general_ledger_book, ageing_workbook, boq_workbook"
+    ]
+  },
+  "completion_date": {
+    "type": "date",
+    "format": "YYYY-MM-DD | DD/MM/YYYY | Month DD, YYYY | DD Month YYYY",
+    "description": "The date when the project was formally finished, commissioned, or handed over.",
+    "examples": [
+      "2011-02-06",
+      "06/02/2011",
+      "February 6, 2011",
+      "06 Feb 2011"
+    ],
+    "normalization": "Parse multi-format dates using dateutil / custom regex parser into ISO 8601 YYYY-MM-DD.",
+    "required_parser": "Date Parser",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "completion_certificate",
+      "reference_letter",
+      "past_performance_portfolio"
+    ]
+  },
+  "issue_date": {
+    "type": "date",
+    "format": "YYYY-MM-DD | DD/MM/YYYY | Month DD, YYYY",
+    "description": "The date of issuance of a certificate, reference letter, bond, or invoice.",
+    "examples": [
+      "2021-03-10",
+      "31/03/2026",
+      "March 10, 2021",
+      "2019-11-14"
+    ],
+    "normalization": "ISO 8601 YYYY-MM-DD.",
+    "required_parser": "Date Parser",
+    "confidence": "High",
+    "document_locations": [
+      "personnel_certificate",
+      "performance_bond",
+      "reference_letter",
+      "ra_bill",
+      "compliance_matrix"
+    ]
+  },
+  "performance_grading": {
+    "type": "string",
+    "format": "Categorical string",
+    "description": "The qualitative assessment of the contractor's performance written in the completion certificate.",
+    "examples": [
+      "Outstanding",
+      "Excellent",
+      "Very Good",
+      "Satisfactory",
+      "Good"
+    ],
+    "normalization": "Standardize to Title Case: 'Outstanding', 'Excellent', 'Very Good', 'Satisfactory', 'Good'.",
+    "required_parser": "Prose & Section Regex / Layout Parser",
+    "confidence": "High",
+    "document_locations": [
+      "completion_certificate",
+      "company_completion_certificate"
+    ]
+  },
+  "project_lead": {
+    "type": "string",
+    "format": "Proper Noun",
+    "description": "The named Project Manager or Project Lead who directed project site execution.",
+    "examples": [
+      "Asha Nair",
+      "Chandan Banerjee",
+      "Neha Chopra",
+      "Rahul Menon",
+      "Gautam Joshi",
+      "Naveen Roy",
+      "Suresh Desai",
+      "Meera Roy"
+    ],
+    "normalization": "Clean whitespace and title prefixes (e.g., 'Er.', 'Mr.', 'Ms.'). Map to canonical employee record.",
+    "required_parser": "Layout Text Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "cv",
+      "annual_report"
+    ]
+  },
+  "credential_id": {
+    "type": "string",
+    "format": "{Prefix}-{Number}",
+    "description": "The unique alphanumeric identifier for an employee's professional certification.",
+    "examples": [
+      "PMI-200006",
+      "PMI-200007",
+      "PMI-200029",
+      "SSBB-100012"
+    ],
+    "normalization": "Upper-case trimmed string.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "personnel_certificate",
+      "cv"
+    ]
+  },
+  "credential_type": {
+    "type": "string",
+    "format": "Categorical credential name",
+    "description": "The designation of the professional qualification.",
+    "examples": [
+      "PMP",
+      "Six Sigma Black Belt",
+      "LEED AP",
+      "Chartered Engineer"
+    ],
+    "normalization": "Standardize acronyms ('PMP', 'SSBB').",
+    "required_parser": "Regex / Layout Text Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "personnel_certificate",
+      "cv"
+    ]
+  },
+  "work_category": {
+    "type": "string",
+    "format": "Categorical industry sector",
+    "description": "The classification vertical of the civil works.",
+    "examples": [
+      "expressways",
+      "tunnels",
+      "bridges",
+      "Bridges Flyovers",
+      "Water Treatment",
+      "Sewerage Drainage",
+      "Buildings"
+    ],
+    "normalization": "Map to canonical categories: 'Highways & Expressways', 'Bridges & Flyovers', 'Tunnels', 'Water Treatment', 'Sewerage & Drainage', 'Buildings', 'Industrial EPC'.",
+    "required_parser": "Layout Text Extractor / Mapping Table",
+    "confidence": "High",
+    "document_locations": [
+      "company_completion_certificate",
+      "past_performance_portfolio",
+      "tender_dossier",
+      "trial_balance_workbook"
+    ]
+  },
+  "role_executed": {
+    "type": "string",
+    "format": "Categorical Role ('Prime' | 'Subcontractor' | 'JV Partner')",
+    "description": "The contractual capacity in which National Infrastructure Corp. Ltd. delivered the works.",
+    "examples": [
+      "Prime",
+      "Subcontractor",
+      "JV Partner",
+      "Lead Member"
+    ],
+    "normalization": "Standardize to 'Prime' or 'Subcontractor' or 'JV'.",
+    "required_parser": "Layout Text Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "completion_certificate",
+      "company_completion_certificate",
+      "past_performance_portfolio"
+    ]
+  },
+  "tender_reference": {
+    "type": "string",
+    "format": "RFP-{Number}",
+    "description": "The unique procurement notice / tender reference number.",
+    "examples": [
+      "RFP-132000485",
+      "RFP-132000582",
+      "RFP-132016005"
+    ],
+    "normalization": "Trimmed uppercase string.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "tender_dossier",
+      "compliance_matrix",
+      "performance_bond"
+    ]
+  },
+  "bond_number": {
+    "type": "string",
+    "format": "BND-{Number}",
+    "description": "Unique identifier of a Performance Bank Guarantee.",
+    "examples": [
+      "BND-00005",
+      "BND-00012"
+    ],
+    "normalization": "Trimmed uppercase string.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "performance_bond"
+    ]
+  },
+  "bank_name": {
+    "type": "string",
+    "format": "Proper Noun / Corporate Bank Name",
+    "description": "The name of the banking institution issuing statements, accounts, or bonds.",
+    "examples": [
+      "Kalinga National Bank",
+      "Union Trust Bank of India"
+    ],
+    "normalization": "Trimmed canonical bank name.",
+    "required_parser": "Layout Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "bank_statement",
+      "performance_bond",
+      "annual_report"
+    ]
+  },
+  "invoice_number": {
+    "type": "string",
+    "format": "AR-{Year}-{Number} | FIN/{Contract_ID}",
+    "description": "The bill / invoice number for interim and final claims.",
+    "examples": [
+      "AR-2021-00344",
+      "AR-2019-00007",
+      "FIN/71"
+    ],
+    "normalization": "Trimmed string.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "ra_bill",
+      "final_ra_bill",
+      "ageing_workbook",
+      "general_ledger_book",
+      "bank_statement"
+    ]
+  },
+  "invoiced_amount": {
+    "type": "integer",
+    "format": "Integer INR",
+    "description": "Gross or net amount billed on the invoice.",
+    "examples": [
+      49283029,
+      20108242,
+      31518216
+    ],
+    "normalization": "Standardize to lossless integer INR.",
+    "required_parser": "Currency Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "ra_bill",
+      "final_ra_bill",
+      "ageing_workbook"
+    ]
+  },
+  "received_amount": {
+    "type": "integer",
+    "format": "Integer INR",
+    "description": "Actual payment collected against an invoice.",
+    "examples": [
+      22320149,
+      49005060,
+      0
+    ],
+    "normalization": "Standardize to lossless integer INR.",
+    "required_parser": "Currency Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "ageing_workbook",
+      "bank_statement",
+      "general_ledger_book"
+    ]
+  },
+  "outstanding_amount": {
+    "type": "integer",
+    "format": "Integer INR",
+    "description": "Uncollected balance receivable from client.",
+    "examples": [
+      28278294,
+      20108242,
+      31518216,
+      -2211907
+    ],
+    "normalization": "Standardize to lossless integer INR.",
+    "required_parser": "Currency Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "ageing_workbook"
+    ]
+  },
+  "account_code": {
+    "type": "string",
+    "format": "ACCOUNT {Number} \u2014 {Title}",
+    "description": "General ledger chart of accounts code.",
+    "examples": [
+      "ACCOUNT 1010 \u2014 BANK (ASSET)",
+      "ACCOUNT 2010 \u2014 ACCOUNTS PAYABLE",
+      "ACCOUNT 4010 \u2014 CONTRACT REVENUE"
+    ],
+    "normalization": "Extract 4-digit account number and title.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "general_ledger_book",
+      "trial_balance_workbook"
+    ]
+  },
+  "voucher_narration": {
+    "type": "string",
+    "format": "Prose narration",
+    "description": "Transaction explanation posted in the general ledger.",
+    "examples": [
+      "Opening capital & plant brought in",
+      "Working-capital facility drawdown",
+      "Monthly salaries & site overheads (201904)",
+      "Receipt against invoice (rcpt #6)"
+    ],
+    "normalization": "Trimmed text string.",
+    "required_parser": "Table Parser",
+    "confidence": "High",
+    "document_locations": [
+      "general_ledger_book"
+    ]
+  },
+  "asset_id": {
+    "type": "integer",
+    "format": "Positive Integer",
+    "description": "Unique identifier of a plant & machinery asset in the register.",
+    "examples": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      8
+    ],
+    "normalization": "Integer value.",
+    "required_parser": "Workbook Cell Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "asset_register_workbook"
+    ]
+  },
+  "asset_cost": {
+    "type": "integer",
+    "format": "Integer INR",
+    "description": "Original acquisition cost of the plant & machinery equipment.",
+    "examples": [
+      15700000,
+      26700000,
+      10100000,
+      39700000
+    ],
+    "normalization": "Lossless integer INR.",
+    "required_parser": "Workbook Cell Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "asset_register_workbook"
+    ]
+  },
+  "corporate_identifiers": {
+    "type": "object",
+    "format": "CIN, GSTIN, PAN",
+    "description": "Statutory corporate registration identifiers for National Infrastructure Corp. Ltd. (deliberately invalid check digits per hackathon rules).",
+    "examples": {
+      "CIN": "U45201WB2005PLC904417",
+      "GSTIN": "19NAICC4417O1Z1",
+      "PAN": "NAICC4417O"
+    },
+    "normalization": "Preserve exact literal string, note invalid check digit status.",
+    "required_parser": "Regex Extractor",
+    "confidence": "High",
+    "document_locations": [
+      "financial_statement",
+      "annual_report",
+      "past_performance_portfolio",
+      "ra_bill",
+      "company_completion_certificate"
+    ]
+  }
+}
