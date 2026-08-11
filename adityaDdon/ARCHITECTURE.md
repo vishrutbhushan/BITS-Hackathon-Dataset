@@ -13,15 +13,20 @@
 3. `SubtaskRetriever` executes the declared DAG in dependency order. Exact
    canonical keys scope SQL; arithmetic uses dependency outputs rather than
    global mutable state or implicit dates.
-4. `AgenticController` confidence-gates model compute. Uncertain plans are
-   adjudicated in small batches using a typed operator catalogue. The model
-   may keep, retrieve, or replan, but it cannot emit numeric answers or invent
-   entities; every accepted replan is compiled and executed by DuckDB. One
-   omitted decision cannot invalidate its siblings, and failed items receive
-   at most one smaller repair batch before deterministic fallback.
-5. `ReasonerNode` only returns the typed execution result. Model/API/schema
-   failures preserve the deterministic seed instead of corrupting an answer.
-6. `BidIntelligencePipeline` applies type-aware formatting. A failure in one
+4. `legacy/` preserves the last stable typed planner/retriever as an independent
+   incumbent. `AgreementEnsemble` executes both architectures. Equal numeric
+   results are accepted without model compute; only genuine disagreements are
+   sent to the semantic arbiter.
+5. The arbiter sees the question and two typed plan descriptions, never their
+   numeric answers. Candidate A/B order is stable-randomized per question. A
+   challenger switch needs confidence at or above the configured threshold in
+   both an arbitration pass and a position-reversed verification pass. Any
+   timeout, malformed JSON, omitted item, or inconsistent vote keeps the stable
+   incumbent.
+6. `ReasonerNode` only returns a typed execution result. The language model is
+   a bounded control plane and cannot calculate, copy, or directly modify an
+   answer.
+7. `BidIntelligencePipeline` applies type-aware formatting. A failure in one
    question is isolated, enriched with BM25 evidence, and cannot abort the
    batch.
 
@@ -58,10 +63,10 @@ python3 -m venv .venv
 ```
 
 The configuration uses Qwen3.5-9B 4-bit through the loopback MLX-VLM
-OpenAI-compatible endpoint. The model is a semantic router and critic only;
-the relational engine remains the answer authority. `local_mlx_server.py`
-disables long reasoning traces because routing requires constrained JSON, not
-open-ended deliberation.
+OpenAI-compatible endpoint. The model arbitrates only the small disagreement
+set; the two relational engines remain the answer authorities.
+`local_mlx_server.py` disables long reasoning traces because routing requires
+constrained JSON, not open-ended deliberation.
 
 ```bash
 python -m unittest -v test_architecture.py test_regressions.py
@@ -70,8 +75,11 @@ python pipeline.py --questions ../sample_questions.json \
   --output /tmp/sample.csv --no-llm
 python ../evaluate.py --submission /tmp/sample.csv \
   --questions ../sample_questions.json
-python run_submission.py
+python pipeline.py --questions ../questions.json \
+  --output submission_ensemble.csv
 ```
 
 `test_architecture.py` uses synthetic/metamorphic questions and SQL-derived
-expectations. `validator.py` checks 14 extraction and cross-table invariants.
+expectations, including model-outage fallback, zero-call agreement, and
+position-bias reversal. `validator.py` checks 14 extraction and cross-table
+invariants.

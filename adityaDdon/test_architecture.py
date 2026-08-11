@@ -12,6 +12,7 @@ sys.path[:0] = [str(CURRENT_DIR), str(CURRENT_DIR / "agent"), str(CURRENT_DIR / 
 
 from entity_resolver import EntityResolver
 from agentic_controller import AgenticController
+from ensemble_controller import AgreementEnsemble
 from intent_planner import ExecutionPlan, IntentPlanner
 from pipeline import BidIntelligencePipeline
 from reasoner import ReasonerNode
@@ -299,6 +300,165 @@ class ArchitectureTests(unittest.TestCase):
             )
         self.assertTrue(controller.enabled)
         self.assertEqual(controller.base_url, "http://127.0.0.1:8080")
+
+    @staticmethod
+    def _legacy_stubs(raw_plan, answer):
+        class Planner:
+            def plan(self, *_args, **_kwargs):
+                return raw_plan
+
+        class Retriever:
+            def execute_plan(self, _plan):
+                return SimpleNamespace(
+                    candidate_answer=answer,
+                    evidence_text="independent typed evidence",
+                )
+
+        return Planner(), Retriever()
+
+    def test_ensemble_agreement_spends_no_model_call(self):
+        current_plan = ExecutionPlan(
+            "synthetic agreement",
+            "hop_aggregate",
+            target_metric="money",
+            anchor_client="Suvarna Projects Limited",
+            confidence=0.9,
+        )
+        current_context = RetrievalContext(
+            plan=current_plan,
+            candidate_answer=11,
+            confidence=0.9,
+            is_complete=True,
+        )
+        raw_legacy = SimpleNamespace(
+            question=current_plan.question,
+            pattern=current_plan.pattern,
+            anchor_person=None,
+            anchor_credential=None,
+            anchor_project=None,
+            anchor_package_num=None,
+            anchor_client=current_plan.anchor_client,
+            anchor_date=None,
+            extra_params={},
+        )
+
+        class NeverCompletions:
+            def create(self, **_kwargs):
+                raise AssertionError("independent agreement must skip the model")
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=NeverCompletions()))
+        agent = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        legacy_planner, legacy_retriever = self._legacy_stubs(raw_legacy, 11)
+        ensemble = AgreementEnsemble(agent, legacy_planner, legacy_retriever)
+        stats = ensemble.prepare_batch([(current_plan, current_context)])
+        outcome = ensemble.resolve(current_plan, current_context)
+        self.assertEqual(stats["agreements"], 1)
+        self.assertEqual(stats["arbitration_batches"], 0)
+        self.assertEqual(outcome.source, "ensemble_deterministic_agreement")
+
+    def test_ensemble_model_failure_defaults_to_incumbent(self):
+        current_plan = ExecutionPlan(
+            "synthetic disagreement",
+            "hop_aggregate",
+            target_metric="money",
+            anchor_client="Suvarna Projects Limited",
+            confidence=0.9,
+        )
+        current_context = RetrievalContext(
+            plan=current_plan,
+            candidate_answer=10,
+            confidence=0.9,
+            is_complete=True,
+        )
+        raw_legacy = SimpleNamespace(
+            question=current_plan.question,
+            pattern="avg_work_size",
+            anchor_person=None,
+            anchor_credential=None,
+            anchor_project=None,
+            anchor_package_num=None,
+            anchor_client=current_plan.anchor_client,
+            anchor_date=None,
+            extra_params={},
+        )
+
+        class BrokenCompletions:
+            def create(self, **_kwargs):
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="not-json"))]
+                )
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=BrokenCompletions()))
+        agent = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        legacy_planner, legacy_retriever = self._legacy_stubs(raw_legacy, 11)
+        ensemble = AgreementEnsemble(agent, legacy_planner, legacy_retriever)
+        stats = ensemble.prepare_batch([(current_plan, current_context)])
+        outcome = ensemble.resolve(current_plan, current_context)
+        self.assertEqual(stats["disagreements"], 1)
+        self.assertEqual(stats["current_switches"], 0)
+        self.assertEqual(outcome.context.candidate_answer, 11)
+        self.assertEqual(outcome.source, "ensemble_legacy_default")
+
+    def test_ensemble_switch_requires_position_reversed_consensus(self):
+        question = "synthetic two pass disagreement"
+        current_plan = ExecutionPlan(
+            question,
+            "hop_aggregate",
+            target_metric="money",
+            anchor_client="Suvarna Projects Limited",
+            confidence=0.9,
+        )
+        current_context = RetrievalContext(
+            plan=current_plan,
+            candidate_answer=10,
+            confidence=0.9,
+            is_complete=True,
+        )
+        raw_legacy = SimpleNamespace(
+            question=question,
+            pattern="avg_work_size",
+            anchor_person=None,
+            anchor_credential=None,
+            anchor_project=None,
+            anchor_package_num=None,
+            anchor_client=current_plan.anchor_client,
+            anchor_date=None,
+            extra_params={},
+        )
+        legacy_first = __import__("hashlib").sha256(question.encode()).digest()[0] % 2 == 0
+        choices = ["B" if legacy_first else "A", "A" if legacy_first else "B"]
+
+        class ConsensusCompletions:
+            def __init__(self):
+                self.calls = 0
+
+            def create(self, **_kwargs):
+                choice = choices[self.calls]
+                self.calls += 1
+                content = __import__("json").dumps(
+                    {"decisions": [{"id": "0", "choice": choice, "confidence": 0.99}]}
+                )
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                )
+
+        completions = ConsensusCompletions()
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        agent = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        legacy_planner, legacy_retriever = self._legacy_stubs(raw_legacy, 11)
+        ensemble = AgreementEnsemble(agent, legacy_planner, legacy_retriever)
+        stats = ensemble.prepare_batch([(current_plan, current_context)])
+        outcome = ensemble.resolve(current_plan, current_context)
+        self.assertEqual(completions.calls, 2)
+        self.assertEqual(stats["current_switches"], 1)
+        self.assertEqual(outcome.context.candidate_answer, 10)
+        self.assertEqual(outcome.source, "ensemble_current_consensus")
 
     def test_batch_control_uses_one_call_and_populates_safe_cache(self):
         plans = [

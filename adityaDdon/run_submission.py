@@ -26,9 +26,9 @@ def main():
     print("OUTPUT DESTINATION:", output_csv)
     print("=" * 70)
 
-    # Adaptive mode spends model calls only on incomplete, ambiguous, or
-    # competing plans.  If the API is unavailable every question safely falls
-    # back to its deterministic DuckDB candidate.
+    # Both typed architectures execute every question. Equal results skip the
+    # model; only disagreements are arbitrated. Any API or schema failure keeps
+    # the last stable incumbent's DuckDB result.
     pipeline = BidIntelligencePipeline(use_agentic=True)
     results = pipeline.process_file(questions_file, output_csv)
 

@@ -26,6 +26,7 @@ from intent_planner import IntentPlanner, ExecutionPlan
 from retriever import SubtaskRetriever, RetrievalContext
 from reasoner import ReasonerNode
 from agentic_controller import AgenticController
+from ensemble_controller import AgreementEnsemble
 
 class BidIntelligencePipeline:
     def __init__(
@@ -45,6 +46,9 @@ class BidIntelligencePipeline:
             self.retriever,
             enabled=agentic_enabled,
             client=agentic_client,
+        )
+        self.ensemble = (
+            AgreementEnsemble(self.controller) if agentic_enabled else None
         )
         self.reasoner = ReasonerNode(use_llm=False)
 
@@ -100,12 +104,12 @@ class BidIntelligencePipeline:
         context: RetrievalContext,
     ) -> Dict[str, Any]:
 
-        # Step 3: adaptively spend model compute on control-plane ambiguity.
-        # On any agent/API/schema failure the controller returns the complete
-        # seed context, preserving a deterministic competition-safe fallback.
-        controller = getattr(self, "controller", None)
-        if controller is not None:
-            outcome = controller.refine(plan, context)
+        # Step 3: preserve independent deterministic agreement and spend model
+        # compute only on real architecture disagreements. Any agent failure
+        # defaults to the stable incumbent plan, never a free-form answer.
+        ensemble = getattr(self, "ensemble", None)
+        if ensemble is not None:
+            outcome = ensemble.resolve(plan, context)
             plan, context = outcome.plan, outcome.context
             control_source = outcome.source
             control_diagnostics = outcome.diagnostics
@@ -161,16 +165,18 @@ class BidIntelligencePipeline:
             ans_type = q.get("answer_type", "money")
             plan, context = self._seed_execution(q_text, ans_type)
             seeded.append((plan, context))
-        controller = getattr(self, "controller", None)
-        if controller is not None:
-            batch_stats = controller.prepare_batch(seeded)
-            if batch_stats["escalated"]:
+        ensemble = getattr(self, "ensemble", None)
+        if ensemble is not None:
+            batch_stats = ensemble.prepare_batch(seeded)
+            if batch_stats["disagreements"]:
                 print(
-                    "Agent routing: "
-                    f"{batch_stats['escalated']} uncertain / {batch_stats['total']} total, "
-                    f"{batch_stats['model_batches']} planning batches, "
-                    f"{batch_stats['repair_batches']} repair batches, "
-                    f"{batch_stats['fallbacks']} safe fallbacks."
+                    "Ensemble routing: "
+                    f"{batch_stats['agreements']} agreements, "
+                    f"{batch_stats['disagreements']} disagreements / "
+                    f"{batch_stats['total']} total, "
+                    f"{batch_stats['arbitration_batches']} arbitration batches, "
+                    f"{batch_stats['verification_batches']} verification batches, "
+                    f"{batch_stats['current_switches']} two-pass challenger switches."
                 )
 
         for i, (q, seed) in enumerate(zip(questions, seeded), 1):
@@ -225,7 +231,7 @@ def main():
     parser.add_argument("--question", help="Single natural language question string")
     parser.add_argument(
         "--no-llm", "--deterministic", dest="no_llm", action="store_true",
-        help="Disable the adaptive agent controller (answers are deterministic in either mode)",
+        help="Disable the agreement ensemble and run only the current deterministic architecture",
     )
     args = parser.parse_args()
 
