@@ -96,7 +96,11 @@ def main():
     
     with open(out_questions, "w", encoding="utf-8") as f:
         for q in questions:
-            json.dump({"qid": q["qid"], "question": q["question"]}, f)
+            json.dump({
+                "qid": q["qid"],
+                "question": q["question"],
+                "answer_type": q.get("answer_type", "money"),
+            }, f)
             f.write("\n")
     logger.info(f"Wrote questions to {out_questions}")
     

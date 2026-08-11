@@ -1,28 +1,19 @@
 """
-Integration test: runs answer_question() end-to-end with a FAKE
-understanding layer (no Ollama/OpenRouter needed) to prove the wiring
-between Stage 4's output shape and Stage 5's dispatcher kwargs is
-correct. Real local_llm.parse_question is swapped out via monkeypatch.
+Integration test: runs answer_question() end-to-end with a FAKE LLM
+(no Ollama needed) to verify the Text-to-SQL wiring is correct.
+
+We monkeypatch local_llm.text_to_sql to return a hand-written SQL query,
+then verify the pipeline executes it correctly against the in-memory DB
+and formats the answer.
 """
 import unittest
 import sys
 import os
-import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.schema import get_connection, upsert_client, upsert_engineer
 import pipeline
-from understanding.entity_match import Gazetteer
 from understanding import local_llm
-
-
-class FakeResponse:
-    def __init__(self, payload):
-        self._payload = payload
-    def raise_for_status(self):
-        pass
-    def json(self):
-        return {"response": json.dumps(self._payload)}
 
 
 class TestPipelineIntegration(unittest.TestCase):
@@ -37,69 +28,90 @@ class TestPipelineIntegration(unittest.TestCase):
                 (f"project-{v}", cid, "other", v, ref, "test"),
             )
         self.con.commit()
-        self.gazetteer = Gazetteer(self.con)
 
-    def test_absence_shape_end_to_end(self):
-        fake_parsed = {
-            "shape": "absence", "client_name": "Jal Nigam, Jharkhand",
-            "engineer_name": None, "project_name": None,
-            "threshold_rupees": None, "grading": None, "role": None,
-            "category_to_exclude": None,
-        }
-        original = local_llm.parse_question
-        local_llm.parse_question = lambda q, g: fake_parsed
+    def _patch_sql(self, sql):
+        """Monkeypatch text_to_sql to return a fixed SQL string."""
+        orig = local_llm.text_to_sql
+        local_llm.text_to_sql = lambda q, c, **kw: sql
+        return orig
+
+    def test_absence_count_via_sql(self):
+        """Pipeline correctly counts projects with no reference letter."""
+        sql = ("SELECT COUNT(*) FROM projects p "
+               "JOIN clients c ON p.client_id=c.client_id "
+               "WHERE c.name='Jal Nigam, Jharkhand' AND p.has_reference_letter=0")
+        orig = self._patch_sql(sql)
         try:
             answer, meta = pipeline.answer_question(
-                self.con, self.gazetteer, "how many works have no reference letter?"
+                self.con, "how many works have no reference letter?", answer_type="count"
             )
             self.assertEqual(answer, 2)
-            self.assertEqual(meta["path"], "local")
+            self.assertEqual(meta["shape"], "text_to_sql")
         finally:
-            local_llm.parse_question = original
+            local_llm.text_to_sql = orig
 
-    def test_referenced_share_end_to_end(self):
-        fake_parsed = {
-            "shape": "referenced_share", "client_name": "Jal Nigam, Jharkhand",
-            "engineer_name": None, "project_name": None,
-            "threshold_rupees": None, "grading": None, "role": None,
-            "category_to_exclude": None,
-        }
-        original = local_llm.parse_question
-        local_llm.parse_question = lambda q, g: fake_parsed
+    def test_referenced_share_via_sql(self):
+        """Pipeline correctly computes percent with reference letter."""
+        sql = ("SELECT ROUND(100.0 * SUM(p.has_reference_letter) / COUNT(*), 2) "
+               "FROM projects p JOIN clients c ON p.client_id=c.client_id "
+               "WHERE c.name='Jal Nigam, Jharkhand'")
+        orig = self._patch_sql(sql)
         try:
             answer, meta = pipeline.answer_question(
-                self.con, self.gazetteer, "what percent have a reference letter?"
+                self.con, "what percent have a reference letter?", answer_type="percent"
             )
             self.assertEqual(answer, 33.33)
         finally:
-            local_llm.parse_question = original
+            local_llm.text_to_sql = orig
 
-    def test_invalid_client_triggers_rag_fallback(self):
-        # local model proposes a client name NOT in the gazetteer ->
-        # must escalate/fall back to RAG rather than silently proceed with garbage.
-        bad_parsed = {
-            "shape": "absence", "client_name": "Not A Real Client",
-            "engineer_name": None, "project_name": None,
-            "threshold_rupees": None, "grading": None, "role": None,
-            "category_to_exclude": None,
-        }
-        orig_local = local_llm.parse_question
-        local_llm.parse_question = lambda q, g: bad_parsed
-
-        orig_rag = pipeline.run_rag_fallback
+    def test_sql_error_triggers_rag_fallback(self):
+        """A broken SQL query must trigger the RAG fallback."""
+        orig_sql = local_llm.text_to_sql
+        orig_rag = pipeline._rag_fallback
         called_rag = []
-        pipeline.run_rag_fallback = lambda q, log: (called_rag.append(q), (999, {"shape": "rag_fallback", "path": "rag_fallback"}))[1]
+
+        local_llm.text_to_sql = lambda q, c, **kw: "SELECT * FROM nonexistent_table"
+        pipeline._rag_fallback = lambda q, atype, log: (
+            called_rag.append(q), (999, {"shape": "rag_fallback", "path": "rag"})
+        )[1]
 
         try:
             answer, meta = pipeline.answer_question(
-                self.con, self.gazetteer, "how many works have no reference letter?"
+                self.con, "how many works have no reference letter?", answer_type="count"
             )
             self.assertEqual(answer, 999)
-            self.assertEqual(meta["path"], "rag_fallback")
+            self.assertEqual(meta["shape"], "rag_fallback")
             self.assertEqual(len(called_rag), 1)
         finally:
-            local_llm.parse_question = orig_local
-            pipeline.run_rag_fallback = orig_rag
+            local_llm.text_to_sql = orig_sql
+            pipeline._rag_fallback = orig_rag
+
+    def test_null_sql_result_triggers_rag_fallback(self):
+        """An empty SQL result (no rows) must trigger the RAG fallback."""
+        orig_sql = local_llm.text_to_sql
+        orig_rag = pipeline._rag_fallback
+        called_rag = []
+
+        # Query returns no rows
+        local_llm.text_to_sql = lambda q, c, **kw: (
+            "SELECT COUNT(*) FROM projects WHERE 1=0 AND 1=1"
+        )
+        pipeline._rag_fallback = lambda q, atype, log: (
+            called_rag.append(q), (0, {"shape": "rag_fallback", "path": "rag"})
+        )[1]
+
+        try:
+            # COUNT(*) on empty set returns 0, not NULL — so test with None-returning query
+            local_llm.text_to_sql = lambda q, c, **kw: (
+                "SELECT value_rupees FROM projects WHERE name='DOES_NOT_EXIST'"
+            )
+            answer, meta = pipeline.answer_question(
+                self.con, "some question", answer_type="money"
+            )
+            self.assertEqual(meta["shape"], "rag_fallback")
+        finally:
+            local_llm.text_to_sql = orig_sql
+            pipeline._rag_fallback = orig_rag
 
 
 if __name__ == "__main__":
