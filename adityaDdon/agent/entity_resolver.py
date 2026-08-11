@@ -72,7 +72,17 @@ class EntityResolver:
             reverse=True,
         )
         self.clients = sorted(
-            {row[0].strip(" ,.") for row in db.fetchall("SELECT canonical_client FROM clients") if row[0]},
+            {
+                row[0].strip(" ,.")
+                for row in db.fetchall(
+                    """
+                    SELECT canonical_client FROM clients
+                    UNION
+                    SELECT canonical_client FROM workbooks_receivables
+                    """
+                )
+                if row[0]
+            },
             key=len,
             reverse=True,
         )

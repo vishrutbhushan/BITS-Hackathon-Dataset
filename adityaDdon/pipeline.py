@@ -13,6 +13,7 @@ import sys
 import csv
 import json
 import argparse
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
@@ -35,15 +36,23 @@ class BidIntelligencePipeline:
         use_llm: bool = True,
         use_agentic: Optional[bool] = None,
         agentic_client: Optional[Any] = None,
+        use_semantic_overrides: Optional[bool] = None,
     ):
         agentic_enabled = use_llm if use_agentic is None else use_agentic
-        # Dense retrieval is a third, deterministic semantic signal. It is
-        # enabled with the ensemble and remains optional when the local model
-        # is absent.
+        # Dense retrieval and cross-encoding remain available as experimental
+        # challengers, but are opt-in.  Their last blind run regressed while
+        # the two typed architectures plus bounded arbiter improved the stable
+        # baseline.  A model preference alone is therefore not sufficient to
+        # mutate a competition answer.
+        if use_semantic_overrides is None:
+            use_semantic_overrides = os.getenv(
+                "SEMANTIC_OVERRIDES_ENABLED", "0"
+            ).strip().lower() in {"1", "true", "yes", "on"}
+        semantic_enabled = bool(agentic_enabled and use_semantic_overrides)
         self.semantic_router = DenseSemanticRouter(
-            OPERATOR_SPECS, enabled=agentic_enabled
+            OPERATOR_SPECS, enabled=semantic_enabled
         )
-        self.plan_reranker = PlanReranker(enabled=agentic_enabled)
+        self.plan_reranker = PlanReranker(enabled=semantic_enabled)
         self.planner = IntentPlanner(semantic_router=self.semantic_router)
         self.retriever = SubtaskRetriever()
         # ``use_llm`` remains a compatibility argument, but model compute now

@@ -16,6 +16,14 @@ import openpyxl
 import fitz
 
 from database import get_db, DEFAULT_DB_PATH
+from source_consensus import (
+    evidence_rows,
+    normalize_date as normalize_source_date,
+    parse_client_certificate,
+    parse_company_certificate,
+    parse_portfolio,
+    reconcile_project,
+)
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
 DOCUMENTS_ROOT = WORKSPACE_ROOT / "documents"
@@ -26,10 +34,7 @@ def parse_iso_date(d_str):
     if not d_str:
         return None
     d_clean = str(d_str).strip()
-    try:
-        return dt_parser.parse(d_clean).strftime('%Y-%m-%d')
-    except Exception:
-        return d_clean
+    return normalize_source_date(d_clean) or d_clean
 
 def normalize_inr(raw):
     if raw is None:
@@ -190,14 +195,14 @@ def build():
             pkg_num = int(m_pkg.group(1))
             ref_projects[pkg_num] = p.stem
 
-    # 5. Extract Client CCs for Ratings (155 files)
+    # 5. Extract Client CCs for independent project facts and ratings.
     client_cc_map = {}
     for p in sorted((DOCUMENTS_ROOT / "completion_certificate").glob("*.pdf")):
         doc = fitz.open(p)
         text = "\n".join([page.get_text() for page in doc])
         doc.close()
-        m_pkg = re.search(r'Pkg-(\d+)', text)
-        pkg_num = int(m_pkg.group(1)) if m_pkg else None
+        record = parse_client_certificate(text, p.stem)
+        pkg_num = record["package_number"]
         
         # Priority 1: Graded in Quality Assessment section
         m_sec3 = re.search(r'3\.\s*Quality Assessment\s*\n+.*?\b(Outstanding|Excellent|Very Good|Satisfactory|Good)\b', text, re.I | re.S)
@@ -219,11 +224,8 @@ def build():
                 grade = "Good"
         
         if pkg_num:
-            client_cc_map[pkg_num] = {
-                "doc_id": p.stem,
-                "grade": grade,
-                "val_inr": extract_labeled_inr(text),
-            }
+            record["grade"] = grade
+            client_cc_map[pkg_num] = record
 
     # 6. Extract Master 155 Works from Past Performance Portfolio (DOC-PPP-001.pdf)
     print("Extracting master catalog from past_performance_portfolio...")
@@ -231,51 +233,9 @@ def build():
     ppp_text = "\n".join([page.get_text() for page in ppp_doc])
     ppp_doc.close()
 
-    # Split into project datasheets
-    ppp_blocks = re.findall(
-        r'(\d+)\.\s*([^\n]+)\s*\nClient\s*\n([^\n]+)\s*\nCategory\s*\n([^\n]+)\s*\nExecuted Value\s*\n([^\n]+)\s*\nCompleted\s*\n([^\n]+)',
-        ppp_text, re.I
-    )
-
-    ppp_records = {}
-    for b in ppp_blocks:
-        w_num = int(b[0])
-        raw_title = b[1].strip()
-        raw_client = b[2].strip()
-        cat = b[3].strip()
-        raw_val = b[4].strip()
-        comp_str = b[5].strip()
-
-        m_pkg = re.search(r'Pkg-(\d+)', raw_title, re.I)
-        pkg_num = int(m_pkg.group(1)) if m_pkg else w_num
-
-        m_role = re.search(r'\((Prime|Subcontractor|JV|Joint Venture|JV Partner)\)', raw_client, re.I)
-        role = "Prime"
-        if m_role:
-            r_matched = m_role.group(1).lower()
-            if "prime" in r_matched:
-                role = "Prime"
-            elif "subcontractor" in r_matched:
-                role = "Subcontractor"
-            elif "jv" in r_matched or "joint" in r_matched:
-                role = "JV Partner"
-
-        canonical_client = clean_client_name(raw_client)
-        val_inr = normalize_inr(raw_val)
-        val_cr = round(val_inr / 10_000_000, 2)
-        comp_date = parse_iso_date(comp_str.split('·')[0].strip())
-
-        ppp_records[pkg_num] = {
-            "work_no": w_num,
-            "raw_title": raw_title,
-            "canonical_client": canonical_client,
-            "raw_client": raw_client,
-            "category": cat,
-            "val_inr": val_inr,
-            "val_cr": val_cr,
-            "comp_date": comp_date,
-            "role": role
-        }
+    ppp_records = parse_portfolio(ppp_text)
+    if len(ppp_records) != 155:
+        raise ValueError(f"Expected 155 portfolio records, parsed {len(ppp_records)}")
 
     # 7. Extract Project Lead & Exact Title from Company Completion Certificates (155 files)
     print("Extracting project leads and metadata from company_completion_certificate...")
@@ -288,37 +248,10 @@ def build():
         m_ref = re.search(r'(?:Internal Ref:\s*CCC/|Ref:\s*NICL/CC/)(\d+)', text)
         work_no = int(m_ref.group(1)) if m_ref else int(re.search(r'\d+', p.stem).group(0))
 
-        m_work = re.search(r'(?:Project Name|Work)\s*\n\s*([^\n]+)', text)
-        title = m_work.group(1).strip() if m_work else ""
-
-        m_pkg = re.search(r'Pkg-(\d+)', title)
-        pkg_num = int(m_pkg.group(1)) if m_pkg else work_no
-
-        m_lead = re.search(r'(?:Project Manager|Project Lead)\s*\n\s*([^\n]+)', text)
-        lead = m_lead.group(1).strip() if m_lead else ""
-
-        m_client = re.search(r'Client\s*\n\s*([^\n]+)', text)
-        ccc_client = m_client.group(1).strip() if m_client else ""
-
-        m_cat = re.search(r'(?:Work Category|Category)\s*\n\s*([^\n]+)', text)
-        ccc_cat = m_cat.group(1).strip() if m_cat else ""
-
-        m_val = re.search(r'(?:Contract Value|Executed Value)\s*\n\s*([^\n]+)', text)
-        val_inr = normalize_inr(m_val.group(1)) if m_val else 0
-
-        m_comp = re.search(r'(?:Completion Date|Completion)\s*\n\s*([^\n]+)', text)
-        comp_date = parse_iso_date(m_comp.group(1)) if m_comp else ""
-
-        ccc_records[pkg_num] = {
-            "doc_id": p.stem,
-            "work_no": work_no,
-            "title": title,
-            "lead": lead,
-            "client": clean_client_name(ccc_client),
-            "category": ccc_cat,
-            "val_inr": val_inr,
-            "comp_date": comp_date
-        }
+        record = parse_company_certificate(text, p.stem)
+        pkg_num = record["package_number"] or work_no
+        record["work_no"] = work_no
+        ccc_records[pkg_num] = record
 
     # 8. Populate Projects Table by synthesizing PPP + CCC + CC + REF
     con.execute("""
@@ -347,31 +280,53 @@ def build():
         );
     """)
 
+    # Every selected project fact remains traceable to each readable source.
+    # This is both an offline audit log and a guard against silent parser drift.
+    con.execute("""
+        CREATE TABLE project_fact_evidence (
+            package_number INTEGER,
+            field_name VARCHAR,
+            source_type VARCHAR,
+            doc_id VARCHAR,
+            raw_value VARCHAR,
+            normalized_value VARCHAR,
+            agrees_with_selected BOOLEAN,
+            consensus_status VARCHAR
+        );
+    """)
+
     for pkg_num in sorted(ccc_records.keys()):
         ccc = ccc_records[pkg_num]
         ppp = ppp_records.get(pkg_num, {})
         cc = client_cc_map.get(pkg_num, {})
 
-        title = ccc.get("title") or ppp.get("raw_title", f"Package Pkg-{pkg_num}")
+        sources = {
+            "company_certificate": ccc,
+            "portfolio": ppp,
+            "client_certificate": cc,
+        }
+        consensus = reconcile_project(sources)
+
+        title = consensus["title"].value or f"Package Pkg-{pkg_num}"
         m_state = re.search(r'(?:—|-)\s*([A-Za-z\s]+?)\s*Pkg-', title)
         state = m_state.group(1).strip() if m_state else "India"
 
         project_id = f"{state.upper().replace(' ', '_')}_PKG_{pkg_num:03d}"
         package_str = f"Pkg-{pkg_num}"
 
-        canonical_client = ppp.get("canonical_client") or ccc.get("client") or "National Special Projects Office"
-        category = ccc.get("category") or ppp.get("category") or "Civil Construction"
-        val_inr = cc.get("val_inr") or ccc.get("val_inr") or ppp.get("val_inr") or 0
+        canonical_client = consensus["client"].value or "National Special Projects Office"
+        category = consensus["category"].value or "Civil Construction"
+        val_inr = consensus["value_inr"].value or 0
         val_cr = round(val_inr / 10_000_000, 2)
-        comp_date = ccc.get("comp_date") or ppp.get("comp_date") or "2020-01-01"
+        comp_date = consensus["completion_date"].value or "2020-01-01"
         comp_year = int(comp_date[:4]) if comp_date and len(comp_date) >= 4 else 2020
-        lead = ccc.get("lead", "")
+        lead = consensus["project_lead"].value or ""
         grade = cc.get("grade", "Satisfactory")
         has_ref = pkg_num in ref_projects
         ref_doc = ref_projects.get(pkg_num, "")
         cc_doc = cc.get("doc_id", "")
         ccc_doc = ccc.get("doc_id", "")
-        role = ppp.get("role", "Prime")
+        role = consensus["role"].value or "Prime"
 
         con.execute("""
             INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -381,6 +336,9 @@ def build():
             comp_date, comp_year, grade, has_ref, role,
             "", ccc_doc, cc_doc, ref_doc
         ])
+
+        for row in evidence_rows(pkg_num, sources, consensus):
+            con.execute("INSERT INTO project_fact_evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
 
     print("Populated 155 projects into relational table.")
 

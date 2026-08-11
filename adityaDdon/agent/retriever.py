@@ -44,7 +44,14 @@ class SubtaskRetriever:
         if client:
             cleaned = client.strip(' ,.')
             rows = self.db.fetchall(
-                "SELECT canonical_client FROM clients WHERE lower(canonical_client) = lower(?)",
+                """
+                SELECT canonical_client FROM (
+                    SELECT canonical_client FROM clients
+                    UNION
+                    SELECT canonical_client FROM workbooks_receivables
+                )
+                WHERE lower(canonical_client) = lower(?)
+                """,
                 [cleaned],
             )
             if len(rows) == 1:

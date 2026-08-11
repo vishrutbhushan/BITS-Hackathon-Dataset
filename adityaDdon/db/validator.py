@@ -17,7 +17,7 @@ def run_validation():
     con = db.conn
 
     passed = 0
-    total = 14
+    total = 18
 
     # 1. Total Projects Count (Invariant: Exactly 155)
     row = con.execute("SELECT COUNT(*) FROM projects").fetchone()
@@ -146,6 +146,68 @@ def run_validation():
             missed_bonds += 1
     print(f"[INV-14] Readable bond amounts missed: {missed_bonds}", end=" -> ")
     assert missed_bonds == 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 15. Every project is represented by all three independent source
+    # families in the provenance table.
+    source_coverage = con.execute("""
+        SELECT COUNT(*) FROM (
+            SELECT package_number
+            FROM project_fact_evidence
+            GROUP BY package_number
+            HAVING COUNT(DISTINCT source_type) = 3
+        )
+    """).fetchone()[0]
+    print(f"[INV-15] Three-source project coverage: {source_coverage} / 155", end=" -> ")
+    assert source_coverage == 155
+    print("PASSED ✅")
+    passed += 1
+
+    # 16. Dates must agree after explicit Indian day-first normalization.
+    non_unanimous_dates = con.execute("""
+        SELECT COUNT(DISTINCT package_number)
+        FROM project_fact_evidence
+        WHERE field_name = 'completion_date' AND consensus_status <> 'unanimous'
+    """).fetchone()[0]
+    print(f"[INV-16] Completion-date source conflicts: {non_unanimous_dates}", end=" -> ")
+    assert non_unanimous_dates == 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 17. No delivery role may come from a silent default.
+    bad_roles = con.execute("""
+        SELECT COUNT(*) FROM projects
+        WHERE role NOT IN ('Prime', 'JV Partner', 'Subcontractor')
+    """).fetchone()[0]
+    role_evidence = con.execute("""
+        SELECT COUNT(DISTINCT package_number)
+        FROM project_fact_evidence WHERE field_name = 'role'
+    """).fetchone()[0]
+    print(f"[INV-17] Proven delivery roles: {role_evidence} / 155", end=" -> ")
+    assert bad_roles == 0 and role_evidence == 155
+    print("PASSED ✅")
+    passed += 1
+
+    # 18. The online project table must exactly match every selected evidence
+    # field that drives arithmetic or routing.
+    project_evidence_mismatches = con.execute("""
+        WITH selected AS (
+            SELECT package_number,
+                   MAX(CASE WHEN field_name='value_inr' AND agrees_with_selected THEN normalized_value END) AS value_inr,
+                   MAX(CASE WHEN field_name='completion_date' AND agrees_with_selected THEN normalized_value END) AS completion_date,
+                   MAX(CASE WHEN field_name='role' AND agrees_with_selected THEN normalized_value END) AS role
+            FROM project_fact_evidence
+            GROUP BY package_number
+        )
+        SELECT COUNT(*)
+        FROM projects p JOIN selected s USING(package_number)
+        WHERE CAST(p.contract_value_inr AS VARCHAR) <> s.value_inr
+           OR p.completion_date <> s.completion_date
+           OR p.role <> s.role
+    """).fetchone()[0]
+    print(f"[INV-18] Online/source selected fact mismatches: {project_evidence_mismatches}", end=" -> ")
+    assert project_evidence_mismatches == 0
     print("PASSED ✅")
     passed += 1
 
