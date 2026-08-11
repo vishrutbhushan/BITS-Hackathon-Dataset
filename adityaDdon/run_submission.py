@@ -26,7 +26,10 @@ def main():
     print("OUTPUT DESTINATION:", output_csv)
     print("=" * 70)
 
-    pipeline = BidIntelligencePipeline(use_llm=False)  # High-speed deterministic DuckDB engine
+    # Adaptive mode spends model calls only on incomplete, ambiguous, or
+    # competing plans.  If the API is unavailable every question safely falls
+    # back to its deterministic DuckDB candidate.
+    pipeline = BidIntelligencePipeline(use_agentic=True)
     results = pipeline.process_file(questions_file, output_csv)
 
     print("\n" + "=" * 70)

@@ -13,8 +13,9 @@ import sys
 import csv
 import json
 import argparse
+from collections import Counter
 from pathlib import Path
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Optional, Union
 
 # Add agent and db directories to path
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -24,14 +25,34 @@ sys.path.append(str(CURRENT_DIR / "db"))
 from intent_planner import IntentPlanner, ExecutionPlan
 from retriever import SubtaskRetriever, RetrievalContext
 from reasoner import ReasonerNode
+from agentic_controller import AgenticController
 
 class BidIntelligencePipeline:
-    def __init__(self, use_llm: bool = True):
+    def __init__(
+        self,
+        use_llm: bool = True,
+        use_agentic: Optional[bool] = None,
+        agentic_client: Optional[Any] = None,
+    ):
         self.planner = IntentPlanner()
         self.retriever = SubtaskRetriever()
-        self.reasoner = ReasonerNode(use_llm=use_llm)
+        # ``use_llm`` remains a compatibility argument, but model compute now
+        # lives entirely in the control plane.  The final answer is always a
+        # typed DuckDB/arithmetic result, never free-form model output.
+        agentic_enabled = use_llm if use_agentic is None else use_agentic
+        self.controller = AgenticController(
+            self.planner,
+            self.retriever,
+            enabled=agentic_enabled,
+            client=agentic_client,
+        )
+        self.reasoner = ReasonerNode(use_llm=False)
 
-    def answer_question(self, question: str, answer_type: str = "money") -> Dict[str, Any]:
+    def _seed_execution(
+        self, question: str, answer_type: str
+    ) -> tuple[ExecutionPlan, RetrievalContext]:
+        """Create and execute the deterministic seed without aborting a batch."""
+        plan = None
         # Step 1: Intent Planning & DAG Decomposition with answer_type hard constraint
         try:
             plan = self.planner.plan(question, answer_type=answer_type)
@@ -43,7 +64,7 @@ class BidIntelligencePipeline:
             # whole submission.  Preserve the failure as low-confidence
             # evidence so an enabled LLM can recover; deterministic batch mode
             # still emits a numeric fallback and continues.
-            plan = locals().get("plan") or ExecutionPlan(
+            plan = plan or ExecutionPlan(
                 question=question,
                 pattern="generic_multi_hop",
                 target_metric=answer_type,
@@ -65,8 +86,34 @@ class BidIntelligencePipeline:
                 is_complete=False,
                 warnings=[str(exc)],
             )
+        return plan, context
 
-        # Step 3: LLM & Deterministic Reasoning / Computation
+    def answer_question(self, question: str, answer_type: str = "money") -> Dict[str, Any]:
+        plan, context = self._seed_execution(question, answer_type)
+        return self._answer_from_seed(question, answer_type, plan, context)
+
+    def _answer_from_seed(
+        self,
+        question: str,
+        answer_type: str,
+        plan: ExecutionPlan,
+        context: RetrievalContext,
+    ) -> Dict[str, Any]:
+
+        # Step 3: adaptively spend model compute on control-plane ambiguity.
+        # On any agent/API/schema failure the controller returns the complete
+        # seed context, preserving a deterministic competition-safe fallback.
+        controller = getattr(self, "controller", None)
+        if controller is not None:
+            outcome = controller.refine(plan, context)
+            plan, context = outcome.plan, outcome.context
+            control_source = outcome.source
+            control_diagnostics = outcome.diagnostics
+        else:
+            control_source = "deterministic"
+            control_diagnostics = []
+
+        # Step 4: deterministic result selection and type formatting.
         final_answer = self.reasoner.reason(context)
 
         # Format answer cleanly
@@ -91,6 +138,8 @@ class BidIntelligencePipeline:
             "confidence": context.confidence,
             "complete": context.is_complete,
             "warnings": context.warnings,
+            "control_source": control_source,
+            "control_diagnostics": control_diagnostics,
         }
 
     def process_file(self, questions_file: Path, output_file: Path) -> List[Dict[str, Any]]:
@@ -103,13 +152,34 @@ class BidIntelligencePipeline:
         submissions = []
         detailed_results = []
 
-        for i, q in enumerate(questions, 1):
+        # Pre-execute relational candidates serially, then batch only the
+        # model control decisions.  This cuts network round trips without
+        # sharing a DuckDB connection across worker threads.
+        seeded = []
+        for q in questions:
+            q_text = q.get("question", "")
+            ans_type = q.get("answer_type", "money")
+            plan, context = self._seed_execution(q_text, ans_type)
+            seeded.append((plan, context))
+        controller = getattr(self, "controller", None)
+        if controller is not None:
+            batch_stats = controller.prepare_batch(seeded)
+            if batch_stats["escalated"]:
+                print(
+                    "Agent routing: "
+                    f"{batch_stats['escalated']} uncertain / {batch_stats['total']} total, "
+                    f"{batch_stats['model_batches']} planning batches, "
+                    f"{batch_stats['repair_batches']} repair batches, "
+                    f"{batch_stats['fallbacks']} safe fallbacks."
+                )
+
+        for i, (q, seed) in enumerate(zip(questions, seeded), 1):
             qid = q.get("qid") or q.get("question_id") or f"Q-{i:04d}"
             q_text = q.get("question", "")
             ans_type = q.get("answer_type", "money")
             gold = q.get("answer", q.get("answer_gold"))
 
-            res = self.answer_question(q_text, answer_type=ans_type)
+            res = self._answer_from_seed(q_text, ans_type, *seed)
             ans = res["answer"]
 
             submissions.append({"question_id": qid, "answer": ans})
@@ -118,11 +188,20 @@ class BidIntelligencePipeline:
                 "question": q_text,
                 "gold": gold,
                 "answer": ans,
-                "pattern": res["pattern"]
+                "pattern": res["pattern"],
+                "control_source": res["control_source"],
+                "control_diagnostics": res["control_diagnostics"],
             })
 
             gold_str = f" (Gold: {gold})" if gold is not None else ""
-            print(f"  [{i:03d}/{len(questions):03d}] {qid:12s} Pattern: {res['pattern']:22s} Answer: {ans}{gold_str}")
+            print(
+                f"  [{i:03d}/{len(questions):03d}] {qid:12s} "
+                f"Pattern: {res['pattern']:22s} Answer: {ans}{gold_str} "
+                f"[{res['control_source']}]"
+            )
+
+        control_counts = Counter(item["control_source"] for item in detailed_results)
+        print("Control outcomes:", dict(sorted(control_counts.items())))
 
         # Write output based on extension (.csv vs .jsonl)
         if str(output_file).endswith(".csv"):
@@ -144,7 +223,10 @@ def main():
     parser.add_argument("--questions", default="../questions.json", help="Path to input questions JSON")
     parser.add_argument("--output", default="submission.csv", help="Path to output submission CSV/JSONL")
     parser.add_argument("--question", help="Single natural language question string")
-    parser.add_argument("--no-llm", action="store_true", help="Run in deterministic math mode without LLM calls")
+    parser.add_argument(
+        "--no-llm", "--deterministic", dest="no_llm", action="store_true",
+        help="Disable the adaptive agent controller (answers are deterministic in either mode)",
+    )
     args = parser.parse_args()
 
     pipeline = BidIntelligencePipeline(use_llm=not args.no_llm)

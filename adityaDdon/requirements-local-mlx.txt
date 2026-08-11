@@ -1,0 +1,12 @@
+# Relational pipeline
+duckdb==1.5.5
+openai==2.53.0
+openpyxl==3.1.5
+PyMuPDF==1.28.2
+python-dotenv==1.2.2
+
+# Apple-Silicon local agent runtime
+mlx-lm==0.31.3
+mlx-vlm==0.3.12
+torch==2.13.0
+torchvision==0.28.0

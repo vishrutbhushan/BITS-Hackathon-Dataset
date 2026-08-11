@@ -2,13 +2,16 @@
 
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
+from types import SimpleNamespace
 
 
 CURRENT_DIR = Path(__file__).resolve().parent
 sys.path[:0] = [str(CURRENT_DIR), str(CURRENT_DIR / "agent"), str(CURRENT_DIR / "db")]
 
 from entity_resolver import EntityResolver
+from agentic_controller import AgenticController
 from intent_planner import ExecutionPlan, IntentPlanner
 from pipeline import BidIntelligencePipeline
 from reasoner import ReasonerNode
@@ -149,19 +152,245 @@ class ArchitectureTests(unittest.TestCase):
         pipeline.reasoner = ReasonerNode(use_llm=False)
         self.assertEqual(pipeline.answer_question("synthetic", "percent")["answer"], 0.5)
 
-    def test_low_confidence_candidate_can_spend_fallback_compute(self):
-        plan = ExecutionPlan("synthetic", "generic_multi_hop", confidence=0.3)
+    def test_agent_controls_plan_but_cannot_supply_the_answer(self):
+        client = self.db.fetchall(
+            "SELECT canonical_client FROM clients ORDER BY total_value_inr DESC LIMIT 1"
+        )[0][0]
+        question = f"Return the average project value for {client}."
+        seed = self.planner.plan(question, "money")
+        seed.confidence = 0.1
+        seed_context = self.retriever.execute_plan(seed)
+
+        class FakeCompletions:
+            def __init__(self):
+                self.responses = [
+                    {
+                        "action": "replan",
+                        "pattern": "hop_aggregate",
+                        "confidence": 0.91,
+                        "slots": {"client": client},
+                        # This field is outside the schema and must be ignored.
+                        "answer": 999,
+                    },
+                    {"choice": "agent", "confidence": 0.9},
+                ]
+
+            def create(self, **_kwargs):
+                content = __import__("json").dumps(self.responses.pop(0))
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                )
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake, max_steps=1
+        )
+        outcome = controller.refine(seed, seed_context)
+        expected = self.db.fetchall(
+            "SELECT SUM(contract_value_inr) FROM projects WHERE canonical_client = ?",
+            [client],
+        )[0][0]
+        self.assertEqual(outcome.context.candidate_answer, expected)
+        self.assertNotEqual(outcome.context.candidate_answer, 999)
+        self.assertEqual(outcome.source, "agent_replanned")
+
+    def test_malformed_agent_output_falls_back_to_seed(self):
+        plan = ExecutionPlan("synthetic", "hop_aggregate", confidence=0.1)
         context = RetrievalContext(
             plan=plan,
             candidate_answer=11,
-            confidence=0.3,
+            confidence=0.1,
             is_complete=True,
         )
-        reasoner = ReasonerNode(use_llm=False)
-        reasoner.use_llm = True
-        reasoner.client = object()
-        reasoner._query_llm = lambda _context: 17
-        self.assertEqual(reasoner.reason(context), 17)
+
+        class BrokenCompletions:
+            def create(self, **_kwargs):
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="not-json"))]
+                )
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=BrokenCompletions()))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake, max_steps=2
+        )
+        outcome = controller.refine(plan, context)
+        self.assertIs(outcome.context, context)
+        self.assertEqual(outcome.source, "agent_fallback_seed")
+
+    def test_agent_ignores_reasoning_trace_before_json(self):
+        plan = ExecutionPlan("synthetic", "hop_aggregate", confidence=0.1)
+        context = RetrievalContext(
+            plan=plan,
+            candidate_answer=11,
+            confidence=0.1,
+            is_complete=True,
+        )
+
+        class ThinkingCompletions:
+            def create(self, **_kwargs):
+                content = '<think>consider {"action":"replan"}</think>\n{"action":"keep"}'
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                )
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=ThinkingCompletions()))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake, max_steps=1
+        )
+        outcome = controller.refine(plan, context)
+        self.assertEqual(outcome.source, "agent_confirmed_seed")
+        self.assertEqual(outcome.context.candidate_answer, 11)
+
+    def test_high_confidence_execution_spends_no_model_call(self):
+        plan = ExecutionPlan("synthetic", "hop_aggregate", confidence=0.99)
+        context = RetrievalContext(
+            plan=plan,
+            candidate_answer=11,
+            confidence=0.99,
+            is_complete=True,
+        )
+
+        class NeverCompletions:
+            def create(self, **_kwargs):
+                raise AssertionError("high-confidence path should not call the model")
+
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=NeverCompletions()))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        outcome = controller.refine(plan, context)
+        self.assertFalse(outcome.escalated)
+        self.assertEqual(outcome.context.candidate_answer, 11)
+
+    def test_operator_confusion_at_old_cutoff_is_escalated(self):
+        """A plausible 0.90 route is not sufficiently calibrated to skip review."""
+        plan = ExecutionPlan(
+            "Add only category alpha plus category beta.",
+            "category_diff",
+            target_metric="money",
+            confidence=0.90,
+        )
+        context = RetrievalContext(
+            plan=plan,
+            candidate_answer=0,
+            confidence=0.90,
+            is_complete=True,
+        )
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=object()))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        escalate, reason = controller.should_escalate(plan, context)
+        self.assertTrue(escalate)
+        self.assertEqual(reason, "low_confidence")
+
+    def test_loopback_agent_needs_no_remote_api_key(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "AGENTIC_BASE_URL": "http://127.0.0.1:8080",
+                "AGENTIC_API_KEY": "",
+                "OPENROUTER_API_KEY": "",
+            },
+            clear=False,
+        ):
+            controller = AgenticController(
+                self.planner, self.retriever, enabled=True
+            )
+        self.assertTrue(controller.enabled)
+        self.assertEqual(controller.base_url, "http://127.0.0.1:8080")
+
+    def test_batch_control_uses_one_call_and_populates_safe_cache(self):
+        plans = [
+            ExecutionPlan(f"synthetic {index}", "hop_aggregate", target_metric="money", confidence=0.2)
+            for index in range(2)
+        ]
+        contexts = [
+            RetrievalContext(
+                plan=plan,
+                candidate_answer=index + 1,
+                confidence=0.2,
+                is_complete=True,
+            )
+            for index, plan in enumerate(plans)
+        ]
+
+        class BatchCompletions:
+            def __init__(self):
+                self.calls = 0
+
+            def create(self, **_kwargs):
+                self.calls += 1
+                content = __import__("json").dumps({
+                    "decisions": [
+                        {"id": "0", "action": "keep"},
+                        {"id": "1", "action": "keep"},
+                    ]
+                })
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                )
+
+        completions = BatchCompletions()
+        fake = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        stats = controller.prepare_batch(list(zip(plans, contexts)))
+        self.assertEqual(stats["model_batches"], 1)
+        self.assertEqual(completions.calls, 1)
+        for plan, context in zip(plans, contexts):
+            outcome = controller.refine(plan, context)
+            self.assertEqual(outcome.context.candidate_answer, context.candidate_answer)
+            self.assertEqual(outcome.source, "agent_confirmed_seed_cache")
+        self.assertEqual(completions.calls, 1)
+
+    def test_one_omitted_batch_item_is_repaired_without_discarding_siblings(self):
+        plans = [
+            ExecutionPlan(f"partial {index}", "hop_aggregate", confidence=0.2)
+            for index in range(2)
+        ]
+        contexts = [
+            RetrievalContext(
+                plan=plan,
+                candidate_answer=index + 1,
+                confidence=0.2,
+                is_complete=True,
+            )
+            for index, plan in enumerate(plans)
+        ]
+
+        class PartialCompletions:
+            def __init__(self):
+                self.calls = 0
+
+            def create(self, **_kwargs):
+                self.calls += 1
+                decisions = (
+                    [{"id": "0", "action": "keep"}]
+                    if self.calls == 1
+                    else [{"id": "0", "action": "keep"}]
+                )
+                content = __import__("json").dumps({"decisions": decisions})
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+                )
+
+        completions = PartialCompletions()
+        fake = SimpleNamespace(
+            chat=SimpleNamespace(completions=completions)
+        )
+        controller = AgenticController(
+            self.planner, self.retriever, enabled=True, client=fake
+        )
+        stats = controller.prepare_batch(list(zip(plans, contexts)))
+        first = controller.refine(plans[0], contexts[0])
+        second = controller.refine(plans[1], contexts[1])
+        self.assertEqual(first.source, "agent_confirmed_seed_cache")
+        self.assertEqual(second.source, "agent_confirmed_seed_cache")
+        self.assertEqual(stats["repair_batches"], 1)
+        self.assertEqual(stats["fallbacks"], 0)
+        self.assertEqual(completions.calls, 2)
 
     def test_turnover_growth_uses_audited_structured_facts(self):
         rows = self.db.fetchall(

@@ -232,3 +232,7 @@ vishrut/questions.jsonl
 vishrut/audit_*.py
 vishrut/lookup_q.py
 vishrut/sample_check.py
+
+# Local inference artifacts (multi-GB, reproducible from model IDs)
+adityaDdon/models/
+adityaDdon/.model_cache/
