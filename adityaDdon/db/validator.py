@@ -10,14 +10,14 @@ from database import get_db, DEFAULT_DB_PATH
 
 def run_validation():
     print("=" * 60)
-    print("RUNNING 8 QUALITY INVARIANT CHECKS ON DUCKDB DATABASE")
+    print("RUNNING QUALITY INVARIANT CHECKS ON DUCKDB DATABASE")
     print("=" * 60)
 
     db = get_db(DEFAULT_DB_PATH)
     con = db.conn
 
     passed = 0
-    total = 8
+    total = 14
 
     # 1. Total Projects Count (Invariant: Exactly 155)
     row = con.execute("SELECT COUNT(*) FROM projects").fetchone()
@@ -81,6 +81,72 @@ def run_validation():
     print(f"[INV-08] DuckDB FTS BM25 Retrieval: {len(fts_results)} matches", end=" -> ")
     assert len(fts_results) > 0, "FTS returned 0 results"
     print(f"PASSED ✅ (Top match: {fts_results[0]['doc_id']}, score: {fts_results[0]['score']:.2f})")
+    passed += 1
+
+    # 9. Every project has a positive exact value and parseable date.
+    bad_projects = con.execute("""
+        SELECT COUNT(*) FROM projects
+        WHERE contract_value_inr <= 0 OR try_cast(completion_date AS DATE) IS NULL
+    """).fetchone()[0]
+    print(f"[INV-09] Complete project facts: {bad_projects} invalid", end=" -> ")
+    assert bad_projects == 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 10. Materialized client aggregates agree with base project facts.
+    bad_clients = con.execute("""
+        SELECT COUNT(*) FROM clients c
+        JOIN (
+            SELECT canonical_client, COUNT(*) AS n, SUM(contract_value_inr) AS v,
+                   SUM(has_reference_letter::INTEGER) AS r
+            FROM projects GROUP BY canonical_client
+        ) p USING (canonical_client)
+        WHERE c.total_works <> p.n OR c.total_value_inr <> p.v OR c.referenced_works <> p.r
+    """).fetchone()[0]
+    print(f"[INV-10] Client aggregate reconciliation: {bad_clients} mismatches", end=" -> ")
+    assert bad_clients == 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 11. Receivables workbook arithmetic is lossless, including overpayments.
+    bad_ar = con.execute("""
+        SELECT COUNT(*) FROM workbooks_receivables
+        WHERE invoiced_inr - received_inr <> outstanding_inr
+    """).fetchone()[0]
+    print(f"[INV-11] Receivables arithmetic: {bad_ar} mismatches", end=" -> ")
+    assert bad_ar == 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 12. All seven audited years expose both contract and total revenue.
+    financial_facts = con.execute("SELECT COUNT(*) FROM financial_metrics").fetchone()[0]
+    print(f"[INV-12] Audited financial metrics: {financial_facts} / 14", end=" -> ")
+    assert financial_facts == 14
+    print("PASSED ✅")
+    passed += 1
+
+    # 13. Measurement facts were not collapsed into tender BOQ rows.
+    measurement_count = con.execute("SELECT COUNT(*) FROM workbooks_boq_measurements").fetchone()[0]
+    print(f"[INV-13] BOQ measurement facts: {measurement_count}", end=" -> ")
+    assert measurement_count > 0
+    print("PASSED ✅")
+    passed += 1
+
+    # 14. A zero parsed bond must not hide a readable non-zero unit amount.
+    zero_bond_texts = con.execute("""
+        SELECT d.content FROM performance_bonds b
+        JOIN documents d ON d.doc_id = b.doc_id
+        WHERE b.guarantee_amount_inr = 0
+    """).fetchall()
+    import re
+    missed_bonds = 0
+    for (content,) in zero_bond_texts:
+        amounts = re.findall(r"(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d+)?)\s*(?:Cr|Crore|Lakhs?)", content, re.I)
+        if any(float(value.replace(',', '')) > 0 for value in amounts):
+            missed_bonds += 1
+    print(f"[INV-14] Readable bond amounts missed: {missed_bonds}", end=" -> ")
+    assert missed_bonds == 0
+    print("PASSED ✅")
     passed += 1
 
     print("=" * 60)

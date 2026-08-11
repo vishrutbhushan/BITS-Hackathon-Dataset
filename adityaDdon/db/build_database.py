@@ -9,6 +9,7 @@ import sys
 import re
 import csv
 import json
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from dateutil import parser as dt_parser
 import openpyxl
@@ -36,12 +37,29 @@ def normalize_inr(raw):
     raw_str = str(raw).strip()
     m_cr = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:Cr|crore)', raw_str, re.I)
     if m_cr:
-        return int(round(float(m_cr.group(1).replace(',', '')) * 10_000_000))
+        return int((Decimal(m_cr.group(1).replace(',', '')) * 10_000_000).quantize(Decimal("1")))
     m_lakh = re.search(r'(?:INR|Rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:Lakh|lakh)', raw_str, re.I)
     if m_lakh:
-        return int(round(float(m_lakh.group(1).replace(',', '')) * 100_000))
-    digits = re.sub(r'[^\d]', '', raw_str)
-    return int(digits) if digits else 0
+        return int((Decimal(m_lakh.group(1).replace(',', '')) * 100_000).quantize(Decimal("1")))
+    cleaned = re.sub(r'^(?:INR|Rs\.?|₹)\s*', '', raw_str, flags=re.I)
+    plain = re.search(r'-?[\d,]+(?:\.\d+)?', cleaned)
+    if not plain:
+        return 0
+    numeric = plain.group(0).replace(',', '')
+    try:
+        return int(Decimal(numeric).quantize(Decimal("1")))
+    except InvalidOperation:
+        return 0
+
+
+def coerce_int(value, default=0):
+    """Convert numeric workbook cells without relying on string.isdigit()."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        return int(Decimal(str(value).replace(',', '')).quantize(Decimal("1")))
+    except (InvalidOperation, ValueError):
+        return default
 
 
 def extract_labeled_inr(text):
@@ -89,7 +107,7 @@ def build():
     if DEFAULT_DB_PATH.exists():
         DEFAULT_DB_PATH.unlink()
 
-    db = get_db(DEFAULT_DB_PATH)
+    db = get_db(DEFAULT_DB_PATH, read_only=False)
     con = db.conn
 
     # 1. Create Raw Documents Table
@@ -488,7 +506,11 @@ def build():
         m_date = re.search(r'(?:Issue Date|Date)\s*[:\n]\s*([^\n]+)', text)
         date = parse_iso_date(m_date.group(1)) if m_date else ""
 
-        m_amt = re.search(r'not exceeding\s+([^\n,]+(?:Lakh|Crore|Cr|Only|\d+))', text, re.I)
+        m_amt = re.search(
+            r'not\s+exceeding\s+((?:INR|Rs\.?|₹)?\s*[\d,]+(?:\.\d+)?\s*(?:Lakh|Lakhs|Crore|Cr)?(?:\s+Only)?)',
+            text,
+            re.I,
+        )
         amt_raw = m_amt.group(1) if m_amt else ""
         amt_inr = normalize_inr(amt_raw)
 
@@ -520,10 +542,10 @@ def build():
         client = str(row[1]).strip() if row[1] else ""
         can_client = clean_client_name(client)
         inv_date = parse_iso_date(row[2])
-        inv_amt = int(row[3]) if row[3] is not None and str(row[3]).strip().isdigit() else 0
+        inv_amt = coerce_int(row[3])
         stat = str(row[4]).strip() if row[4] else ""
-        rcv_amt = int(row[5]) if row[5] is not None and str(row[5]).strip().isdigit() else 0
-        out_amt = int(row[6]) if row[6] is not None and str(row[6]).strip().replace('-', '').isdigit() else 0
+        rcv_amt = coerce_int(row[5])
+        out_amt = coerce_int(row[6])
         con.execute("""
             INSERT INTO workbooks_receivables VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """, [inv_no, client, can_client, inv_date, inv_amt, stat, rcv_amt, out_amt])
@@ -550,7 +572,7 @@ def build():
         atype = str(row[1]).strip() if row[1] else ""
         make = str(row[2]).strip() if row[2] else ""
         acq_yr = int(row[3]) if row[3] is not None and str(row[3]).strip().isdigit() else 2020
-        cost = int(row[4]) if row[4] is not None and str(row[4]).strip().isdigit() else 0
+        cost = coerce_int(row[4])
         cond = str(row[5]).strip() if row[5] else ""
         loc = str(row[6]).strip() if row[6] else ""
         own = str(row[7]).strip() if row[7] else "owned"
@@ -581,9 +603,9 @@ def build():
             m_acc = re.search(r'ACCOUNT\s*(\d+)\s*[—\-]\s*(.+)', acc_full, re.I)
             acode = m_acc.group(1) if m_acc else acc_full[:4]
             aname = m_acc.group(2) if m_acc else acc_full
-            dr = int(row[1]) if row[1] is not None and str(row[1]).strip().isdigit() else 0
-            cr = int(row[2]) if row[2] is not None and str(row[2]).strip().isdigit() else 0
-            bal = int(row[3]) if row[3] is not None and str(row[3]).strip().replace('-', '').isdigit() else 0
+            dr = coerce_int(row[1])
+            cr = coerce_int(row[2])
+            bal = coerce_int(row[3])
             con.execute("""
                 INSERT INTO workbooks_trial_balance VALUES (?, ?, ?, ?, ?, ?);
             """, [fy, acode, aname, dr, cr, bal])
@@ -620,6 +642,77 @@ def build():
                 con.execute("""
                     INSERT INTO workbooks_boq VALUES (?, ?, ?, ?, ?, ?, ?);
                 """, [cid, ino, desc, unit, qty, rate, amt])
+
+    # Measurement rows are a separate fact set from tender BOQ quantities.
+    # Keeping both makes quantity variance queries deterministic instead of
+    # forcing an LLM to add dozens of spreadsheet rows.
+    con.execute("""
+        CREATE TABLE workbooks_boq_measurements (
+            contract_id INTEGER,
+            ra_number INTEGER,
+            measured_on VARCHAR,
+            item_no VARCHAR,
+            description VARCHAR,
+            quantity_measured DOUBLE,
+            amount_inr BIGINT
+        );
+    """)
+    for p in sorted(wb_root.glob("BOQ_and_Measurements_Contract_*.xlsx")):
+        match = re.search(r"Contract_(\d+)", p.name)
+        contract_id = int(match.group(1)) if match else 0
+        workbook = openpyxl.load_workbook(p, data_only=True)
+        if "Measurements" not in workbook.sheetnames:
+            continue
+        for row in list(workbook["Measurements"].iter_rows(values_only=True))[1:]:
+            if not row or row[0] is None or row[2] is None:
+                continue
+            try:
+                quantity = float(row[4] or 0)
+            except (TypeError, ValueError):
+                quantity = 0.0
+            con.execute(
+                "INSERT INTO workbooks_boq_measurements VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    contract_id,
+                    coerce_int(row[0]),
+                    parse_iso_date(row[1]),
+                    str(row[2]).strip(),
+                    str(row[3]).strip() if row[3] else "",
+                    quantity,
+                    coerce_int(row[5]),
+                ],
+            )
+
+    # Lossless yearly turnover facts from the audited financial statements.
+    con.execute("""
+        CREATE TABLE financial_metrics (
+            fiscal_year_start INTEGER,
+            fiscal_year VARCHAR,
+            metric VARCHAR,
+            amount_inr BIGINT,
+            doc_id VARCHAR,
+            PRIMARY KEY (fiscal_year_start, metric)
+        );
+    """)
+    for doc_id, content in con.execute(
+        "SELECT doc_id, content FROM documents WHERE doc_type = 'financial_statement' ORDER BY doc_id"
+    ).fetchall():
+        year_match = re.search(r"DOC-FS-(20\d{2})", doc_id)
+        if not year_match:
+            continue
+        year = int(year_match.group(1))
+        revenue_match = re.search(
+            r"Total\s+Revenue\s+from\s+Operations(?:\s*\(A\))?\s*(?:\n\s*\(A\))?\s*\n\s*([\d,]+)",
+            content,
+            re.I,
+        )
+        contract_match = re.search(r"Contract\s+Revenue\s*\(EPC\)\s*\n\s*([\d,]+)", content, re.I)
+        for metric, match in (("total_revenue", revenue_match), ("contract_revenue", contract_match)):
+            if match:
+                con.execute(
+                    "INSERT INTO financial_metrics VALUES (?, ?, ?, ?, ?)",
+                    [year, f"FY{year}-{str(year + 1)[-2:]}", metric, int(match.group(1).replace(',', '')) * 100_000, doc_id],
+                )
 
     print("DuckDB database rebuilt with 100% precision!")
     db.close()

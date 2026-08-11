@@ -33,10 +33,38 @@ class BidIntelligencePipeline:
 
     def answer_question(self, question: str, answer_type: str = "money") -> Dict[str, Any]:
         # Step 1: Intent Planning & DAG Decomposition with answer_type hard constraint
-        plan = self.planner.plan(question, answer_type=answer_type)
+        try:
+            plan = self.planner.plan(question, answer_type=answer_type)
 
-        # Step 2: Subtask Execution via DuckDB FTS & Relational SQL
-        context = self.retriever.execute_plan(plan)
+            # Step 2: Subtask Execution via DuckDB FTS & Relational SQL
+            context = self.retriever.execute_plan(plan)
+        except Exception as exc:
+            # One malformed or genuinely ambiguous question must not abort the
+            # whole submission.  Preserve the failure as low-confidence
+            # evidence so an enabled LLM can recover; deterministic batch mode
+            # still emits a numeric fallback and continues.
+            plan = locals().get("plan") or ExecutionPlan(
+                question=question,
+                pattern="generic_multi_hop",
+                target_metric=answer_type,
+                confidence=0.0,
+                diagnostics=[f"planning failure: {exc}"],
+            )
+            fallback_lines = [f"Deterministic execution failed: {exc}"]
+            try:
+                for hit in self.retriever.db.search_fts(question, limit=5):
+                    fallback_lines.append(
+                        f"FTS [{hit['doc_id']} / {hit['doc_type']}]: {hit['content'][:500]}"
+                    )
+            except Exception as retrieval_exc:
+                fallback_lines.append(f"Fallback retrieval also failed: {retrieval_exc}")
+            context = RetrievalContext(
+                plan=plan,
+                evidence_text="\n".join(fallback_lines),
+                confidence=0.0,
+                is_complete=False,
+                warnings=[str(exc)],
+            )
 
         # Step 3: LLM & Deterministic Reasoning / Computation
         final_answer = self.reasoner.reason(context)
@@ -44,10 +72,10 @@ class BidIntelligencePipeline:
         # Format answer cleanly
         if answer_type == "percent" or plan.pattern in ["referenced_share", "collection_rate"]:
             if isinstance(final_answer, (int, float)):
-                if 0.0 < float(final_answer) <= 1.0:
-                    final_answer = round(float(final_answer) * 100, 2)
-                else:
-                    final_answer = round(float(final_answer), 2)
+                # Every percentage-producing executor and the LLM contract use
+                # the public 0..100 scale.  Magnitude-based conversion corrupts
+                # legitimate small percentages (0.5% became 50%).
+                final_answer = round(float(final_answer), 2)
         elif isinstance(final_answer, float) and final_answer.is_integer():
             final_answer = int(final_answer)
         elif isinstance(final_answer, (int, float)) and answer_type in ["money", "days", "count"]:
@@ -59,7 +87,10 @@ class BidIntelligencePipeline:
             "answer": final_answer,
             "candidate": context.candidate_answer,
             "subtasks_count": len(plan.subtasks),
-            "evidence": context.evidence_text
+            "evidence": context.evidence_text,
+            "confidence": context.confidence,
+            "complete": context.is_complete,
+            "warnings": context.warnings,
         }
 
     def process_file(self, questions_file: Path, output_file: Path) -> List[Dict[str, Any]]:

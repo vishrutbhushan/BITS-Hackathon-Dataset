@@ -26,7 +26,9 @@ class ReasonerNode:
         if self.use_llm:
             self.client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=OPENROUTER_API_KEY
+                api_key=OPENROUTER_API_KEY,
+                timeout=30.0,
+                max_retries=2,
             )
         else:
             self.client = None
@@ -37,15 +39,17 @@ class ReasonerNode:
         """
         candidate = context.candidate_answer
 
-        # If we have a deterministic candidate from relational execution, prioritize/verify it
-        if candidate is not None:
+        # High-confidence relational answers are exact and should not spend an
+        # LLM call.  Low-confidence candidates can be audited by the LLM when
+        # enabled, preserving compute for genuinely ambiguous inputs.
+        if candidate is not None and context.is_complete and context.confidence >= 0.72:
             # Format candidate according to expected metric type
             if isinstance(candidate, float):
                 return round(candidate, 2)
             if isinstance(candidate, (int, float)):
                 return candidate
 
-        # If candidate is None or we need LLM reasoning on complex unstructured queries
+        # If candidate is missing/uncertain, use the evidence-based fallback.
         if self.use_llm and self.client:
             try:
                 llm_ans = self._query_llm(context)
@@ -67,6 +71,9 @@ QUESTION:
 
 EXECUTION PLAN & RETRIEVED EVIDENCE FROM DUCKDB:
 {context.evidence_text}
+
+PLANNER CONFIDENCE: {context.confidence:.3f}
+WARNINGS: {context.warnings}
 
 INSTRUCTIONS:
 1. Read the retrieved facts and evidence carefully.
