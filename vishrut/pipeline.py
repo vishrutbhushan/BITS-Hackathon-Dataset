@@ -16,11 +16,17 @@ Each line of `questions.jsonl` should look like:
 """
 import argparse
 import json
+import re
 import sys
 import time
 import logging
 
 logger = logging.getLogger("vishrut.pipeline")
+
+# Matches explicit monetary unit language in question text.
+# We only extract a threshold_rupees when this appears, to avoid
+# mistaking cert IDs / pkg numbers for rupee amounts.
+_MONETARY_MARKERS = re.compile(r'\b(crore|lakh|inr|rs\.?|₹)\b', re.IGNORECASE)
 
 from db.schema import get_connection
 from understanding.entity_match import Gazetteer
@@ -128,13 +134,14 @@ def answer_question(con, gazetteer, question_text: str, log=None):
         if resolved_eng:
             parsed["engineer_name"] = resolved_eng
 
-    # 3. Rule-Based Threshold Money Extraction: parse_money is more reliable than
-    #    the LLM on raw INR/Cr/Lakh strings. Only overwrite if a clear monetary
-    #    expression is found in the question text.
-    from parsers.money import parse_money
-    extracted_money = parse_money(question_text)
-    if extracted_money is not None:
-        parsed["threshold_rupees"] = extracted_money
+    # 3. Rule-Based Threshold Money Extraction: only override when the question
+    #    contains explicit monetary unit language. Bare numbers in questions are
+    #    usually cert IDs or pkg numbers, NOT rupee thresholds.
+    if _MONETARY_MARKERS.search(question_text):
+        from parsers.money import parse_spoken_amount
+        extracted_money = parse_spoken_amount(question_text)
+        if extracted_money is not None:
+            parsed["threshold_rupees"] = extracted_money
 
     # 4. Entity Validation (Warn rather than crash, fall back to RAG if invalid)
     if not local_llm.validate(parsed, gazetteer):
